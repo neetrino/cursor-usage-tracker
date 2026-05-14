@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model CursorAccount {
+  id          String         @id @default(cuid())
+  name        String
+  owningUser  String         @unique
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  users       InternalUser[]
+}
+
+model InternalUser {
+  id              String   @id @default(cuid())
+  userKey         String   @unique
+  name            String
+  computerId      String
+  cursorAccountId String
+  cursorAccount   CursorAccount @relation(fields: [cursorAccountId], references: [id], onDelete: Cascade)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  localEvents     LocalAiEvent[]
+  matchedUsageEvents CursorUsageEvent[]
+}
+
+model LocalAiEvent {
+  id           String    @id @default(cuid())
+  userId       String?
+  user         InternalUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userKey      String
+  userName     String
+  computerId   String
+  owningUser   String
+  timestampMs  BigInt
+  timestampUtc DateTime
+  source       String
+  marker       String
+  rawLineHash  String    @unique
+  syncedAt     DateTime?
+  createdAt    DateTime  @default(now())
+
+  matchedUsages CursorUsageEvent[]
+
+  @@index([owningUser, timestampMs])
+}
+
+model CursorUsageEvent {
+  id                 String   @id @default(cuid())
+  owningUser         String
+  timestampMs        BigInt
+  timestampUtc       DateTime
+  model              String
+  kind               String?
+  inputTokens        Int
+  outputTokens       Int
+  cacheReadTokens    Int
+  totalTokens        Int
+  chargedCents       Float?
+  requestsCosts      Float?
+  totalCents         Float?
+  isChargeable       Boolean?
+  isTokenBasedCall   Boolean?
+  isHeadless         Boolean?
+  rawHash            String   @unique
+  rawJson            Json?
+  matchedUserId      String?
+  matchedUser        InternalUser? @relation(fields: [matchedUserId], references: [id], onDelete: SetNull)
+  matchedLocalEventId String? @unique
+  matchedLocalEvent   LocalAiEvent? @relation(fields: [matchedLocalEventId], references: [id], onDelete: SetNull)
+  matchDiffMs        Int?
+  matchConfidence    Float?
+  matchStatus        String   @default("unmatched")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([owningUser, timestampMs])
+}
+
+model SyncRun {
+  id                   String    @id @default(cuid())
+  source               String
+  status               String
+  startedAt            DateTime
+  finishedAt           DateTime?
+  importedCount        Int       @default(0)
+  skippedDuplicateCount Int      @default(0)
+  errorMessage         String?
+  metadata             Json?
+}

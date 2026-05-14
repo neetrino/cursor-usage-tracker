@@ -1,0 +1,91 @@
+{
+  "name": "cursor-usage-tracker-extension",
+  "displayName": "Cursor Usage Tracker",
+  "description": "Detects local Cursor AI-start markers and posts metadata to your internal tracker backend.",
+  "version": "0.0.1",
+  "publisher": "cursor-usage-tracker",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cursorUsageTracker.setup",
+        "title": "Cursor Usage Tracker: Setup"
+      },
+      {
+        "command": "cursorUsageTracker.setLogPath",
+        "title": "Cursor Usage Tracker: Set Cursor Log Path"
+      },
+      {
+        "command": "cursorUsageTracker.testLogDetection",
+        "title": "Cursor Usage Tracker: Test Log Detection"
+      },
+      {
+        "command": "cursorUsageTracker.showPending",
+        "title": "Cursor Usage Tracker: Show Pending Events"
+      },
+      {
+        "command": "cursorUsageTracker.syncNow",
+        "title": "Cursor Usage Tracker: Sync Now"
+      }
+    ],
+    "configuration": {
+      "title": "Cursor Usage Tracker",
+      "properties": {
+        "cursorUsageTracker.backendUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL of the tracker API (example: http://localhost:3000)"
+        },
+        "cursorUsageTracker.userKey": {
+          "type": "string",
+          "default": ""
+        },
+        "cursorUsageTracker.userName": {
+          "type": "string",
+          "default": ""
+        },
+        "cursorUsageTracker.computerId": {
+          "type": "string",
+          "default": ""
+        },
+        "cursorUsageTracker.owningUser": {
+          "type": "string",
+          "default": ""
+        },
+        "cursorUsageTracker.cursorLogPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional override path to the active Cursor Window log file."
+        },
+        "cursorUsageTracker.cursorAccountGroup": {
+          "type": "string",
+          "default": "",
+          "description": "Optional label for your own reference (not sent to the server)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "watch": "node ./scripts/build.mjs --watch",
+    "lint": "eslint src --max-warnings 0",
+    "package": "pnpm build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@cursor-usage-tracker/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.2",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.0"
+  }
+}

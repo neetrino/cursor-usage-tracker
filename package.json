@@ -1,0 +1,24 @@
+{
+  "name": "cursor-usage-tracker",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "db:generate": "pnpm --filter web exec prisma generate",
+    "db:migrate": "pnpm --filter web exec prisma migrate dev",
+    "db:push": "pnpm --filter web exec prisma db push",
+    "db:seed": "pnpm --filter web exec prisma db seed",
+    "worker": "pnpm --filter worker start",
+    "worker:once": "pnpm --filter worker once",
+    "extension:build": "pnpm --filter @cursor-usage-tracker/shared build && pnpm --filter cursor-usage-tracker-extension build",
+    "extension:package": "pnpm --filter cursor-usage-tracker-extension package",
+    "test": "pnpm --filter @cursor-usage-tracker/shared test && pnpm --filter web test"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2"
+  }
+}
