@@ -1,5 +1,5 @@
 import { prisma } from '@/server/db';
-import type { DashboardSummary } from '@cursor-usage-tracker/shared';
+import type { DashboardSummary } from '@cursor-usage-tracker/shared/schemas';
 
 function startOfUtcDay(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));

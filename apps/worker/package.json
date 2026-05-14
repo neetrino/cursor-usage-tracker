@@ -10,7 +10,7 @@
     "lint": "eslint src --max-warnings 0"
   },
   "dependencies": {
-    "@cursor-usage-tracker/shared": "workspace:*",
+    "@cursor-usage-tracker/shared": "file:../../packages/shared",
     "@prisma/client": "^6.2.1",
     "dotenv": "^16.4.7"
   },

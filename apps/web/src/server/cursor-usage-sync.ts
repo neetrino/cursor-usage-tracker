@@ -1,4 +1,4 @@
-import { cursorUsageImportSchema } from '@cursor-usage-tracker/shared';
+import { cursorUsageImportSchema } from '@cursor-usage-tracker/shared/schemas';
 import { importCursorUsageJson } from './cursor-usage-import';
 import { prisma } from './db';
 

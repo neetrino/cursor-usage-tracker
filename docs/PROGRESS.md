@@ -32,6 +32,7 @@
 ## Phase 6 — Tracker API
 
 - [x] `POST /api/tracker/events`
+- [x] `GET /api/tracker/health` (lightweight auth check for extension settings UI)
 
 ## Phase 7 — Matching
 
@@ -44,6 +45,7 @@
 ## Phase 9 — Extension
 
 - [x] Commands + tail + markers + queue + VSIX packaging
+- [x] Webview **Open Settings** panel (single-place config, SecretStorage for tracker key, globalState for other fields, status + queue actions)
 
 ## Phase 10 — Worker
 
@@ -53,3 +55,12 @@
 
 - [x] Vitest coverage (shared + matcher)
 - [x] README operational guide
+
+## Post-MVP fixes (extension webview)
+
+- [x] **Save / webview payloads**: Central `asString` / `isNonEmptyString` helpers; normalize all form fields before validation or storage; `cursorLogPath` optional on Save; split `cursorAccountGroup` + `customCursorAccountGroup`; hardened backend URL and path handling so webview Save never throws on undefined fields.
+
+## Post-MVP fixes (startup)
+
+- [x] **Next.js env loading**: Removed `apps/web/src/env-bootstrap.ts` and `dotenv` from `apps/web`. Next.js loads `.env` / `.env.local` automatically; `dotenv` remains only in `apps/worker` for CLI processes.
+- [x] **SQLite PRAGMAs**: Switched WAL and `busy_timeout` from `$executeRawUnsafe` to `$queryRawUnsafe` (PRAGMA returns rows). Wrapped in try/catch: failure logs a warning and does not block startup.

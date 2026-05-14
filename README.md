@@ -25,12 +25,12 @@ pnpm install
 
 ## Configure environment
 
-Copy `.env.example` to the repo root `.env` (and optionally `apps/web/.env` for Prisma CLI convenience).
+Copy `.env.example` to the **repo root** `.env`. Next.js uses `envDir` (see `apps/web/next.config.ts`) so variables like `ADMIN_API_KEY` are read from the monorepo root — you do not need to duplicate them in `apps/web/.env` for the web app. Optionally keep `apps/web/.env` with `DATABASE_URL` if you run Prisma CLI only from `apps/web` and want a separate file.
 
 At minimum set:
 
 - `DATABASE_URL` (see notes below)
-- `TRACKER_API_KEY` (extension → `POST /api/tracker/events`)
+- `TRACKER_API_KEY` (extension → `POST /api/tracker/events`, `GET /api/tracker/health`)
 - `ADMIN_API_KEY` (dashboard login + admin curl routes)
 
 Optional Cursor usage sync (server-only):
@@ -85,24 +85,28 @@ pnpm extension:build
 pnpm extension:package
 ```
 
-This writes `apps/extension/cursor-usage-tracker-extension-0.0.1.vsix`.
+This writes `apps/extension/cursor-usage-tracker-extension-0.0.3.vsix`.
 
 Install in Cursor:
 
 - Command Palette → **Extensions: Install from VSIX…** → pick the `.vsix`
+- Reload the window after upgrading so the new bundle is loaded.
 
 ## Configure the extension
 
-Run **Cursor Usage Tracker: Setup** and provide:
+Use **Cursor Usage Tracker: Open Settings** (or **Setup**, which opens the same panel). One webview collects:
 
-- `backendUrl` (example `http://localhost:3000`)
-- `trackerApiKey` (matches `TRACKER_API_KEY`)
-- `userKey`, `userName`, `computerId`, `owningUser` (must match your `InternalUser` seed + usage JSON owning user)
+- **Backend URL** (example `http://localhost:3000`)
+- **Tracker API key** (matches server `TRACKER_API_KEY`) — stored only in VS Code **SecretStorage**, never in `globalState` or logs
+- **userKey**, **userName**, **computerId**, **owningUser** (must match your `InternalUser` seed + Cursor usage JSON `owningUser`)
+- **Cursor Account Group** (`ultra_1`, `ultra_2`, or custom label — optional metadata for your own reference)
+- **Cursor log path** — use **Auto Discover** / **Browse File** / **Test Log Detection** from the panel
 
-Optional:
+Non-secret values are saved in the extension **globalState** (with a one-time fallback to legacy workspace settings if present). **Test Backend Connection** calls `GET /api/tracker/health` with `x-tracker-api-key`.
 
-- Manual Window log path (**Set Cursor Log Path**)
-- On Windows, the extension attempts discovery under `%APPDATA%\\Cursor\\logs\\**\\window*.log`
+Optional palette commands still work: **Set Cursor Log Path**, **Test Log Detection**, **Show Pending Events** (opens a JSON preview + count), **Sync Now**.
+
+On Windows, **Auto Discover** scans `%APPDATA%\\Cursor\\logs\\**\\*.log`, scores recent files by marker hits, and prefers `renderer.log` when scores tie.
 
 ## Operational workflows
 

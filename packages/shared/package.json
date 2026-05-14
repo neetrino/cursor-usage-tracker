@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./schemas": {
+      "types": "./dist/schemas.d.ts",
+      "import": "./dist/schemas.js",
+      "require": "./dist/schemas.cjs"
     }
   },
   "files": ["dist"],
@@ -20,11 +25,9 @@
     "test": "vitest run -c vitest.config.ts"
   },
   "dependencies": {
-    "luxon": "^3.5.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/luxon": "^3.4.2",
     "@types/node": "^22.10.2",
     "eslint": "^9.17.0",
     "tsup": "^8.3.5",

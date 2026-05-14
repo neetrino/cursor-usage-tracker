@@ -1,6 +1,6 @@
 import { prisma } from '@/server/db';
 import { verifyTrackerApiKey } from '@/server/auth';
-import { trackerEventsRequestSchema } from '@cursor-usage-tracker/shared';
+import { trackerEventsRequestSchema } from '@cursor-usage-tracker/shared/schemas';
 import { runMatchingPass } from '@/server/matching/runMatching';
 import { jsonResponse } from '@/server/http';
 
@@ -27,14 +27,8 @@ export async function POST(req: Request): Promise<Response> {
       where: { userKey: ev.userKey },
       include: { cursorAccount: true },
     });
-    if (internal && internal.cursorAccount.owningUser !== ev.owningUser) {
-      return jsonResponse(
-        { error: `owningUser does not match configured account for userKey "${ev.userKey}"` },
-        { status: 400 },
-      );
-    }
-
-    const userId = internal?.id ?? null;
+    const userId =
+      internal && internal.cursorAccount.owningUser === ev.owningUser ? internal.id : null;
 
     try {
       await prisma.localAiEvent.create({

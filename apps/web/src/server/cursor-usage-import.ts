@@ -2,7 +2,7 @@ import {
   cursorUsageImportSchema,
   normalizeCursorUsageEvent,
   type CursorUsageImportPayload,
-} from '@cursor-usage-tracker/shared';
+} from '@cursor-usage-tracker/shared/schemas';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { runMatchingPass } from './matching/runMatching';
 

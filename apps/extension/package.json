@@ -2,7 +2,7 @@
   "name": "cursor-usage-tracker-extension",
   "displayName": "Cursor Usage Tracker",
   "description": "Detects local Cursor AI-start markers and posts metadata to your internal tracker backend.",
-  "version": "0.0.1",
+  "version": "0.0.5",
   "publisher": "cursor-usage-tracker",
   "engines": {
     "vscode": "^1.90.0"
@@ -12,6 +12,10 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "cursorUsageTracker.openSettings",
+        "title": "Cursor Usage Tracker: Open Settings"
+      },
       {
         "command": "cursorUsageTracker.setup",
         "title": "Cursor Usage Tracker: Setup"
@@ -77,7 +81,7 @@
     "package": "pnpm build && vsce package --no-dependencies"
   },
   "dependencies": {
-    "@cursor-usage-tracker/shared": "workspace:*"
+    "@cursor-usage-tracker/shared": "file:../../packages/shared"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
