@@ -11,8 +11,6 @@ RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 FROM base AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
-# Coolify (and others) may set NODE_ENV=production during build; force dev deps for install + compile.
-ENV NODE_ENV=development
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/web/package.json ./apps/web/
@@ -20,10 +18,13 @@ COPY packages/shared/package.json ./packages/shared/
 COPY apps/extension/package.json ./apps/extension/
 COPY apps/worker/package.json ./apps/worker/
 
+# Install devDependencies even if the host sets NODE_ENV=production (Coolify, CI).
 RUN pnpm install --frozen-lockfile --prod=false
 
+ENV NODE_ENV=production
+
 COPY packages/shared ./packages/shared
-# Invalidate this layer when web sources change: Coolify can pass e.g. `--build-arg CACHE_BUST=$(date +%s)` or use "Clear build cache".
+# Bust layers below when the value changes (Coolify: Build Args / `CACHE_BUST=$(date +%s)` or "Clear Build Cache").
 ARG CACHE_BUST=1
 RUN echo "cache-bust=${CACHE_BUST}"
 COPY apps/web ./apps/web

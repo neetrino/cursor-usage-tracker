@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        # Bump per deploy in Coolify env if stale Docker layers persist (e.g. timestamp or git SHA).
+        CACHE_BUST: ${CACHE_BUST:-1}
     expose:
       - "3000"
     volumes:
