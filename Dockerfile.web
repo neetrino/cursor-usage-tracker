@@ -37,11 +37,12 @@ RUN set -eux; \
 RUN pnpm --filter web exec prisma generate
 # Writable SQLite for any build-time DB touch; runtime DATABASE_URL comes from Coolify/compose (file:/data/...).
 ENV DATABASE_URL=file:/tmp/cursor-usage-build.db
+# Run `next build` directly (not `pnpm --filter web build`), so stdout/stderr go to the Docker log.
+# Shared + prisma generate already ran above; the web package.json build script would only nest output.
 RUN set -eux; \
     echo "Build-time env check:"; \
     node -e "console.log({NODE_ENV:process.env.NODE_ENV,DATABASE_URL:process.env.DATABASE_URL?'<set>':'<missing>',TRACKER_API_KEY:process.env.TRACKER_API_KEY?'<set>':'<missing>',ADMIN_API_KEY:process.env.ADMIN_API_KEY?'<set>':'<missing>'})"; \
-    pnpm --filter web build > /tmp/next-build.log 2>&1 || \
-    (echo "===== NEXT BUILD FAILED: FULL TAIL ====="; tail -n 300 /tmp/next-build.log; echo "===== PRERENDER CONTEXT ====="; grep -B 120 -A 40 "Error occurred prerendering page" /tmp/next-build.log || true; exit 1)
+    cd apps/web && npx next build
 
 FROM base AS runner
 RUN apt-get update \
