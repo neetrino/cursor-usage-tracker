@@ -23,6 +23,9 @@ COPY apps/worker/package.json ./apps/worker/
 RUN pnpm install --frozen-lockfile --prod=false
 
 COPY packages/shared ./packages/shared
+# Invalidate this layer when web sources change: Coolify can pass e.g. `--build-arg CACHE_BUST=$(date +%s)` or use "Clear build cache".
+ARG CACHE_BUST=1
+RUN echo "cache-bust=${CACHE_BUST}"
 COPY apps/web ./apps/web
 
 RUN set -eux; \
