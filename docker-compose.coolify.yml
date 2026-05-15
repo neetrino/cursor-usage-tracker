@@ -1,0 +1,31 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    expose:
+      - "3000"
+    volumes:
+      - cursor_usage_data:/data
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/data/cursor-usage.db
+      TRACKER_API_KEY: ${TRACKER_API_KEY}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      MATCH_MAX_DIFF_MS: ${MATCH_MAX_DIFF_MS:-3000}
+      MATCH_AUTO_CONFIDENT_MS: ${MATCH_AUTO_CONFIDENT_MS:-1000}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-"Cursor Usage Tracker"}
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'curl -fsS -H "x-tracker-api-key: $$TRACKER_API_KEY" "http://127.0.0.1:3000/api/tracker/health" > /dev/null || exit 1',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+volumes:
+  cursor_usage_data:

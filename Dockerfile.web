@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+# Production image: Next.js app in apps/web (Coolify / Hetzner).
+# Full workspace sources are copied so `pnpm install --frozen-lockfile` matches the lockfile.
+# Only the `web` service is started; extension/worker are not run.
+
+FROM node:22-bookworm-slim AS base
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+FROM base AS builder
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps ./apps
+COPY packages ./packages
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @cursor-usage-tracker/shared build
+RUN pnpm --filter web exec prisma generate
+RUN pnpm --filter web build
+
+FROM base AS runner
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=builder /app /app
+EXPOSE 3000
+CMD ["sh", "-c", "pnpm --filter web exec prisma migrate deploy && pnpm --filter web start"]

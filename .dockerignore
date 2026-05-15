@@ -1,0 +1,23 @@
+# Dependencies and build outputs (rebuilt in image)
+node_modules
+**/node_modules
+**/.next
+**/dist
+
+# Git and IDE
+.git
+.github
+.cursor
+.vscode
+
+# Secrets — never ship into image
+.env
+.env.*
+!.env.example
+
+# Context bloat
+**/*.vsix
+**/*.log
+coverage
+.turbo
+mcps

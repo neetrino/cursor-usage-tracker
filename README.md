@@ -141,6 +141,50 @@ curl -sS -H "x-tracker-api-key: $TRACKER_API_KEY" -H "content-type: application/
 pnpm test
 ```
 
+## Production: Coolify on Hetzner (`apps/web` only)
+
+Deploy the Next.js dashboard/API with Prisma on SQLite using the root **`Dockerfile.web`** and **`docker-compose.coolify.yml`**. **`apps/extension`** and **`apps/worker`** are not part of this stack. `.env` files are excluded from the Docker build context (`.dockerignore`); configure secrets in Coolify, not in the image.
+
+### Image behavior
+
+- **Base:** `node:22-bookworm-slim`; **pnpm:** Corepack `pnpm@9.15.0` (matches root `package.json`).
+- **Build order:** `pnpm --filter @cursor-usage-tracker/shared build` → `pnpm --filter web exec prisma generate` → `pnpm --filter web build`.
+- **Start:** `pnpm --filter web exec prisma migrate deploy && pnpm --filter web start`.
+- **SQLite:** `DATABASE_URL=file:/data/cursor-usage.db`; named volume **`cursor_usage_data`** mounted at **`/data`**.
+- **Port:** container listens on **3000**; compose uses **`expose`** only (no host `ports:`); Coolify’s reverse proxy targets the service.
+- **Healthcheck:** `GET http://127.0.0.1:3000/api/tracker/health` with header **`x-tracker-api-key`** set from **`TRACKER_API_KEY`**.
+- **`NEXT_PUBLIC_APP_NAME`:** optional compose default; `app/layout.tsx` falls back to `Cursor Usage Tracker` if unset.
+
+### Environment variables
+
+| Variable | Required | Default (compose) |
+|----------|----------|-------------------|
+| `TRACKER_API_KEY` | Yes | — |
+| `ADMIN_API_KEY` | Yes | — |
+| `MATCH_MAX_DIFF_MS` | No | `3000` |
+| `MATCH_AUTO_CONFIDENT_MS` | No | `1000` |
+| `NEXT_PUBLIC_APP_NAME` | No | `Cursor Usage Tracker` |
+
+`DATABASE_URL` is set in compose to `file:/data/cursor-usage.db`; override only if you intentionally change the DB path.
+
+### Coolify setup (summary)
+
+1. On a Hetzner VPS (or any host), install [Coolify](https://coolify.io/docs).
+2. Add a **Docker Compose** resource from this Git repository.
+3. Set the compose file to **`docker-compose.coolify.yml`** and the build context to the **repository root**.
+4. Add **`TRACKER_API_KEY`** and **`ADMIN_API_KEY`** in Coolify (same names the app already reads).
+5. Attach a public domain / TLS in Coolify for the service.
+6. After the first deploy, **seed** users/accounts if needed (Coolify one-off command or local `pnpm db:seed` against a DB copy). Migrations run on every container start.
+
+### Local checks
+
+```bash
+docker compose -f docker-compose.coolify.yml config
+docker compose -f docker-compose.coolify.yml build
+```
+
+For `build` / `up`, set `TRACKER_API_KEY` and `ADMIN_API_KEY` in your shell or a compose-only env file (not copied into the image).
+
 ## SQLite backup
 
 See `docs/BACKUP.md`.
