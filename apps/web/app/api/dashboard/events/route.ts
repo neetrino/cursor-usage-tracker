@@ -1,4 +1,4 @@
-import { prisma } from '@/server/db';
+import { getPrisma } from '@/server/db';
 import { verifyAdminApiKey } from '@/server/auth';
 import { jsonResponse } from '@/server/http';
 import type { Prisma } from '@prisma/client';
@@ -11,6 +11,7 @@ export async function GET(req: Request): Promise<Response> {
     return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const prisma = getPrisma();
   const { searchParams } = new URL(req.url);
   const take = Math.min(Number(searchParams.get('limit') ?? '50') || 50, 200);
   const skip = Math.max(Number(searchParams.get('offset') ?? '0') || 0, 0);

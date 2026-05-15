@@ -1,4 +1,4 @@
-import { prisma } from '@/server/db';
+import { getPrisma } from '@/server/db';
 import type { Prisma } from '@prisma/client';
 
 export default async function UsageEventsPage({
@@ -13,6 +13,7 @@ export default async function UsageEventsPage({
   const from = typeof sp.from === 'string' ? sp.from : undefined;
   const to = typeof sp.to === 'string' ? sp.to : undefined;
 
+  const prisma = getPrisma();
   const where: Prisma.CursorUsageEventWhereInput = {};
   if (owningUser) where.owningUser = owningUser;
   if (matchStatus) where.matchStatus = matchStatus;

@@ -1,4 +1,4 @@
-import { prisma } from '@/server/db';
+import { getPrisma } from '@/server/db';
 import {
   importCursorUsageJsonAction,
   runMatchingNowAction,
@@ -11,6 +11,7 @@ export default async function SettingsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
+  const prisma = getPrisma();
   const accounts = await prisma.cursorAccount.findMany({ orderBy: { name: 'asc' } });
   const users = await prisma.internalUser.findMany({
     orderBy: { userKey: 'asc' },

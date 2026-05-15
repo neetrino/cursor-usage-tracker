@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { ADMIN_COOKIE_NAME, adminCookieValue } from '@/server/auth';
-import { logoutAdminAction } from '@/server/dashboard-actions';
+import { logoutAdminAction } from '@/server/admin-session-actions';
 
 export default async function SecureDashboardLayout({
   children,

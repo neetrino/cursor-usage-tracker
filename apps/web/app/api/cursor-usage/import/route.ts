@@ -1,5 +1,5 @@
 import { importCursorUsageJson } from '@/server/cursor-usage-import';
-import { prisma } from '@/server/db';
+import { getPrisma } from '@/server/db';
 import { verifyAdminApiKey } from '@/server/auth';
 import { jsonResponse } from '@/server/http';
 
@@ -13,7 +13,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const body: unknown = await req.json();
   const result = await importCursorUsageJson({
-    prisma,
+    prisma: getPrisma(),
     rawBody: body,
     source: 'manual_import',
     runMatch: true,

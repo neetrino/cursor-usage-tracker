@@ -5,10 +5,11 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 type SqlitePragmaState = 'pending' | 'ok' | 'failed';
 let sqlitePragmaState: SqlitePragmaState = 'pending';
 
+let prismaSingleton: PrismaClient | undefined;
+
 async function applySqlitePragmas(client: PrismaClient): Promise<void> {
   if (sqlitePragmaState !== 'pending') return;
   try {
-    // PRAGMA returns rows — use $queryRawUnsafe, not $executeRawUnsafe (SQLite + Prisma).
     await client.$queryRawUnsafe(`PRAGMA journal_mode=WAL`);
     await client.$queryRawUnsafe(`PRAGMA busy_timeout=5000`);
     sqlitePragmaState = 'ok';
@@ -22,12 +23,21 @@ function createClient(): PrismaClient {
   return new PrismaClient();
 }
 
-export const prisma = globalForPrisma.prisma ?? createClient();
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
+/** Lazily construct Prisma so importing this module never touches DATABASE_URL at load time. */
+export function getPrisma(): PrismaClient {
+  const cached = globalForPrisma.prisma ?? prismaSingleton;
+  if (cached) {
+    prismaSingleton = cached;
+    return cached;
+  }
+  const client = createClient();
+  prismaSingleton = client;
+  if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.prisma = client;
+  }
+  return client;
 }
 
 export async function ensureSqlitePragmas(): Promise<void> {
-  await applySqlitePragmas(prisma);
+  await applySqlitePragmas(getPrisma());
 }

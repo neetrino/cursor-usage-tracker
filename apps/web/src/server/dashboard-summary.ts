@@ -1,4 +1,4 @@
-import { prisma } from '@/server/db';
+import { getPrisma } from '@/server/db';
 import type { DashboardSummary } from '@cursor-usage-tracker/shared/schemas';
 
 function startOfUtcDay(d: Date): Date {
@@ -12,6 +12,7 @@ function addUtcDays(d: Date, days: number): Date {
 }
 
 export async function buildDashboardSummary(): Promise<DashboardSummary> {
+  const prisma = getPrisma();
   const now = new Date();
   const todayStart = startOfUtcDay(now);
   const weekStart = addUtcDays(todayStart, -6);

@@ -1,4 +1,4 @@
-import { prisma } from '@/server/db';
+import { getPrisma } from '@/server/db';
 import { verifyTrackerApiKey } from '@/server/auth';
 import { trackerEventsRequestSchema } from '@cursor-usage-tracker/shared/schemas';
 import { runMatchingPass } from '@/server/matching/runMatching';
@@ -16,6 +16,7 @@ export async function POST(req: Request): Promise<Response> {
     return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const prisma = getPrisma();
   const body: unknown = await req.json();
   const parsed = trackerEventsRequestSchema.safeParse(body);
   if (!parsed.success) {

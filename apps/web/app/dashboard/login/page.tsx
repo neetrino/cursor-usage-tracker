@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { loginAdminAction } from '@/server/dashboard-actions';
+import { loginAdminAction } from '@/server/admin-session-actions';
 
 export default async function LoginPage({
   searchParams,

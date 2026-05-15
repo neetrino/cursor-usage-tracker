@@ -1,4 +1,4 @@
-import { prisma } from '@/server/db';
+import { getPrisma } from '@/server/db';
 import { verifyAdminApiKey } from '@/server/auth';
 import { runMatchingPass } from '@/server/matching/runMatching';
 import { jsonResponse } from '@/server/http';
@@ -11,6 +11,6 @@ export async function POST(req: Request): Promise<Response> {
     return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const result = await runMatchingPass(prisma);
+  const result = await runMatchingPass(getPrisma());
   return jsonResponse(result);
 }

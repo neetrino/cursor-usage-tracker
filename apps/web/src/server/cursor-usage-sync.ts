@@ -1,6 +1,6 @@
 import { cursorUsageImportSchema } from '@cursor-usage-tracker/shared/schemas';
 import { importCursorUsageJson } from './cursor-usage-import';
-import { prisma } from './db';
+import { getPrisma } from './db';
 
 export async function performCursorUsageSync(): Promise<{
   ok: true;
@@ -37,7 +37,7 @@ export async function performCursorUsageSync(): Promise<{
   const parsedBody = cursorUsageImportSchema.parse(body);
 
   const result = await importCursorUsageJson({
-    prisma,
+    prisma: getPrisma(),
     rawBody: parsedBody,
     source: 'cursor_usage_api',
     runMatch: true,
