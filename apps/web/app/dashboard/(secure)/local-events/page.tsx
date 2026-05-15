@@ -1,6 +1,9 @@
 import { getPrisma } from '@/server/db';
 import type { Prisma } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function LocalEventsPage({
   searchParams,
 }: {

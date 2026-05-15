@@ -1,5 +1,8 @@
 import { buildDashboardSummary } from '@/server/dashboard-summary';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 function Card({ title, value }: { title: string; value: string | number }) {
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">

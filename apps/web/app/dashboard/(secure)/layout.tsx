@@ -4,6 +4,9 @@ import { redirect } from 'next/navigation';
 import { ADMIN_COOKIE_NAME, adminCookieValue } from '@/server/auth';
 import { logoutAdminAction } from '@/server/admin-session-actions';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function SecureDashboardLayout({
   children,
 }: {

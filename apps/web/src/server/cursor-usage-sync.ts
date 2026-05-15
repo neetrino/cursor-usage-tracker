@@ -1,6 +1,7 @@
 import { cursorUsageImportSchema } from '@cursor-usage-tracker/shared/schemas';
 import { importCursorUsageJson } from './cursor-usage-import';
 import { getPrisma } from './db';
+import { getRequiredEnv } from './env';
 
 export async function performCursorUsageSync(): Promise<{
   ok: true;
@@ -13,10 +14,7 @@ export async function performCursorUsageSync(): Promise<{
     throw new Error('CURSOR_USAGE_SYNC_ENABLED is not true');
   }
 
-  const url = process.env.CURSOR_USAGE_API_URL;
-  if (!url) {
-    throw new Error('CURSOR_USAGE_API_URL is not set');
-  }
+  const url = getRequiredEnv('CURSOR_USAGE_API_URL');
 
   const headersJson = process.env.CURSOR_USAGE_HEADERS_JSON;
   let headers: Record<string, string> = { accept: 'application/json' };

@@ -5,6 +5,9 @@ import {
   syncCursorUsageNowAction,
 } from '@/server/dashboard-actions';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function SettingsPage({
   searchParams,
 }: {
