@@ -26,7 +26,17 @@ export async function performCursorUsageSync(): Promise<{
     headers = { ...headers, ...(parsed as Record<string, string>) };
   }
 
-  const res = await fetch(url, { headers, method: 'GET' });
+  const res = await fetch(url, {
+    headers: { ...headers, 'content-type': 'application/json' },
+    method: 'POST',
+    body: JSON.stringify({
+      teamId: 0,
+      startDate: String(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      endDate: String(Date.now()),
+      page: 1,
+      pageSize: 100,
+    }),
+  });
   if (!res.ok) {
     throw new Error(`Upstream fetch failed: HTTP ${res.status}`);
   }
