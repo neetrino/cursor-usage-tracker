@@ -14,7 +14,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Coolify (and others) may set NODE_ENV=production during build; force dev deps for install + compile.
 ENV NODE_ENV=development
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/extension/package.json ./apps/extension/
@@ -25,7 +25,15 @@ RUN pnpm install --frozen-lockfile --prod=false
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
 
-RUN pnpm --filter @cursor-usage-tracker/shared build
+RUN set -eux; \
+    echo "Node version:"; node -v; \
+    echo "PNPM version:"; pnpm -v; \
+    echo "Current dir:"; pwd; \
+    echo "Root files:"; ls -la; \
+    echo "Shared files:"; ls -la packages/shared; \
+    echo "Shared package.json:"; cat packages/shared/package.json; \
+    echo "Check tsup:"; pnpm --filter @cursor-usage-tracker/shared exec tsup --version; \
+    echo "Build shared:"; pnpm --filter @cursor-usage-tracker/shared build
 RUN pnpm --filter web exec prisma generate
 RUN pnpm --filter web build
 
