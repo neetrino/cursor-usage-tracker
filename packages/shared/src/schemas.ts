@@ -9,12 +9,14 @@ export const cursorUsageApiEventSchema = z.object({
   requestsCosts: z.number().optional(),
   usageBasedCosts: z.union([z.string(), z.number()]).optional(),
   isTokenBasedCall: z.boolean().optional(),
-  tokenUsage: z.object({
-    inputTokens: z.number(),
-    outputTokens: z.number(),
-    cacheReadTokens: z.number(),
-    totalCents: z.number().optional(),
-  }),
+  tokenUsage: z
+    .object({
+      inputTokens: z.number(),
+      outputTokens: z.number(),
+      cacheReadTokens: z.number(),
+      totalCents: z.number().optional(),
+    })
+    .optional(),
   owningUser: z.string(),
   cursorTokenFee: z.number().optional(),
   isChargeable: z.boolean().optional(),
@@ -78,9 +80,9 @@ export type CursorUsageEventNormalized = {
 
 export function normalizeCursorUsageEvent(event: CursorUsageApiEvent): CursorUsageEventNormalized {
   const timestampMs = parseCursorTimestampMs(event.timestamp);
-  const inputTokens = event.tokenUsage.inputTokens;
-  const outputTokens = event.tokenUsage.outputTokens;
-  const cacheReadTokens = event.tokenUsage.cacheReadTokens;
+  const inputTokens = event.tokenUsage?.inputTokens ?? 0;
+  const outputTokens = event.tokenUsage?.outputTokens ?? 0;
+  const cacheReadTokens = event.tokenUsage?.cacheReadTokens ?? 0;
   const totalTokens = calculateTotalTokens({ inputTokens, outputTokens, cacheReadTokens });
   const rawHash = createCursorUsageRawHash({
     owningUser: event.owningUser,
@@ -102,7 +104,7 @@ export function normalizeCursorUsageEvent(event: CursorUsageApiEvent): CursorUsa
     totalTokens,
     chargedCents: event.chargedCents ?? null,
     requestsCosts: event.requestsCosts ?? null,
-    totalCents: event.tokenUsage.totalCents ?? null,
+    totalCents: event.tokenUsage?.totalCents ?? null,
     isChargeable: event.isChargeable ?? null,
     isTokenBasedCall: event.isTokenBasedCall ?? null,
     isHeadless: event.isHeadless ?? null,
