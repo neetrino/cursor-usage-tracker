@@ -1,8 +1,65 @@
 import { getPrisma } from '@/server/db';
 import { importCursorUsageJsonAction, runMatchingNowAction } from '@/server/dashboard-actions';
+import { SyncFromCursorButton } from './SyncFromCursorButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+function Alert({ tone, children }: { tone: 'ok' | 'err'; children: React.ReactNode }) {
+  const styles =
+    tone === 'ok'
+      ? 'border-emerald-900/50 bg-emerald-950/30 text-emerald-300'
+      : 'border-red-900/50 bg-red-950/30 text-red-300';
+  return (
+    <p className={`rounded-xl border px-4 py-3 text-sm ${styles}`}>{children}</p>
+  );
+}
+
+function DataTable({
+  title,
+  headers,
+  rows,
+}: {
+  title: string;
+  headers: string[];
+  rows: Array<Array<string | number | null>>;
+}) {
+  return (
+    <section className="rounded-xl border border-[#1f1f1f] bg-[#111111] p-5">
+      <h2 className="mb-4 text-sm font-medium text-[#e5e5e5]">{title}</h2>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-[#666]">
+              {headers.map((h) => (
+                <th className="pb-3 pr-4 font-medium" key={h}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => (
+              <tr
+                className="border-t border-[#1f1f1f] transition-colors hover:bg-[#1a1a1a]"
+                key={idx}
+              >
+                {row.map((cell, ci) => (
+                  <td
+                    className={`py-3 pr-4 ${ci > 0 && headers[ci]?.includes('owning') ? 'font-mono text-xs text-[#666]' : 'text-[#e5e5e5]'}`}
+                    key={ci}
+                  >
+                    {cell ?? '—'}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 export default async function SettingsPage({
   searchParams,
@@ -19,142 +76,101 @@ export default async function SettingsPage({
   const runs = await prisma.syncRun.findMany({ orderBy: { startedAt: 'desc' }, take: 25 });
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Usage data is imported via Tampermonkey (
-          <code className="text-slate-200">tampermonkey-cursor-sync.js</code>) or manual JSON below.
-          Matching runs hourly in the worker.
+        <h1 className="text-xl font-semibold text-[#e5e5e5]">Settings</h1>
+        <p className="mt-1 text-sm text-[#666]">
+          Sync usage from Cursor, run matching, or import JSON manually.
         </p>
       </div>
 
-      {sp.imported === '1' ? (
-        <p className="rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200">
-          Import completed.
-        </p>
-      ) : null}
+      {sp.imported === '1' ? <Alert tone="ok">Import completed.</Alert> : null}
       {typeof sp.importError === 'string' ? (
-        <p className="rounded-md border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-200">
-          Import error: {sp.importError}
-        </p>
+        <Alert tone="err">Import error: {sp.importError}</Alert>
       ) : null}
-      {sp.matched === '1' ? (
-        <p className="rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200">
-          Matching completed.
-        </p>
-      ) : null}
+      {sp.matched === '1' ? <Alert tone="ok">Matching completed.</Alert> : null}
       {typeof sp.matchError === 'string' ? (
-        <p className="rounded-md border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-200">
-          Matching error: {sp.matchError}
-        </p>
+        <Alert tone="err">Matching error: {sp.matchError}</Alert>
+      ) : null}
+      {sp.synced === '1' ? (
+        <Alert tone="ok">
+          Sync completed — imported {sp.imported ?? 0}, skipped {sp.skipped ?? 0} duplicates.
+        </Alert>
+      ) : null}
+      {typeof sp.syncError === 'string' ? <Alert tone="err">Sync error: {sp.syncError}</Alert> : null}
+      {sp.syncHint === '1' ? (
+        <Alert tone="err">
+          {typeof sp.message === 'string' && sp.message
+            ? decodeURIComponent(sp.message)
+            : 'Open cursor.com — Tampermonkey will sync automatically.'}
+        </Alert>
       ) : null}
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Matching</h2>
+      <section className="rounded-xl border border-[#1f1f1f] bg-[#111111] p-5">
+        <h2 className="mb-4 text-sm font-medium text-[#e5e5e5]">Cursor sync</h2>
+        <SyncFromCursorButton />
+      </section>
+
+      <section className="rounded-xl border border-[#1f1f1f] bg-[#111111] p-5">
+        <h2 className="mb-4 text-sm font-medium text-[#e5e5e5]">Matching</h2>
         <form action={runMatchingNowAction}>
-          <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-900" type="submit">
+          <button
+            className="rounded-xl border border-[#1f1f1f] px-4 py-2 text-sm text-[#e5e5e5] transition-colors hover:bg-[#1a1a1a]"
+            type="submit"
+          >
             Run matching now
           </button>
         </form>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Manual JSON import</h2>
+      <section className="rounded-xl border border-[#1f1f1f] bg-[#111111] p-5">
+        <h2 className="mb-4 text-sm font-medium text-[#e5e5e5]">Manual JSON import</h2>
         <form action={importCursorUsageJsonAction} className="space-y-3">
           <textarea
-            className="min-h-[220px] w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-100"
+            className="min-h-[200px] w-full rounded-xl border border-[#1f1f1f] bg-[#0a0a0a] px-3 py-2 font-mono text-xs text-[#e5e5e5] outline-none focus:border-[#6366f1]"
             name="json"
-            placeholder='Paste Cursor dashboard JSON: { "totalUsageEventsCount": ..., "usageEventsDisplay": [...] }'
+            placeholder='{ "totalUsageEventsCount": ..., "usageEventsDisplay": [...] }'
             required
           />
-          <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-white" type="submit">
+          <button
+            className="rounded-xl bg-[#6366f1] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            type="submit"
+          >
             Import usage JSON
           </button>
         </form>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Cursor accounts</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-slate-400">
-              <tr>
-                <th className="py-2">Name</th>
-                <th className="py-2">owningUser</th>
-                <th className="py-2">Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.map((a) => (
-                <tr className="border-t border-slate-800" key={a.id}>
-                  <td className="py-2">{a.name}</td>
-                  <td className="py-2 font-mono text-xs">{a.owningUser}</td>
-                  <td className="py-2 text-slate-400">{a.description ?? '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <DataTable
+        title="Cursor accounts"
+        headers={['Name', 'owningUser', 'Description']}
+        rows={accounts.map((a) => [a.name, a.owningUser, a.description])}
+      />
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Internal users</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-slate-400">
-              <tr>
-                <th className="py-2">userKey</th>
-                <th className="py-2">Name</th>
-                <th className="py-2">computerId</th>
-                <th className="py-2">Account</th>
-                <th className="py-2">owningUser</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr className="border-t border-slate-800" key={u.id}>
-                  <td className="py-2">{u.userKey}</td>
-                  <td className="py-2">{u.name}</td>
-                  <td className="py-2 font-mono text-xs">{u.computerId}</td>
-                  <td className="py-2">{u.cursorAccount.name}</td>
-                  <td className="py-2 font-mono text-xs">{u.cursorAccount.owningUser}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <DataTable
+        title="Internal users"
+        headers={['userKey', 'Name', 'computerId', 'Account', 'owningUser']}
+        rows={users.map((u) => [
+          u.userKey,
+          u.name,
+          u.computerId,
+          u.cursorAccount.name,
+          u.cursorAccount.owningUser,
+        ])}
+      />
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Recent sync runs</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-slate-400">
-              <tr>
-                <th className="py-2">Started</th>
-                <th className="py-2">Source</th>
-                <th className="py-2">Status</th>
-                <th className="py-2">Imported</th>
-                <th className="py-2">Skipped dupes</th>
-                <th className="py-2">Error</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((r) => (
-                <tr className="border-t border-slate-800" key={r.id}>
-                  <td className="py-2 font-mono text-xs">{r.startedAt.toISOString()}</td>
-                  <td className="py-2">{r.source}</td>
-                  <td className="py-2">{r.status}</td>
-                  <td className="py-2">{r.importedCount}</td>
-                  <td className="py-2">{r.skippedDuplicateCount}</td>
-                  <td className="py-2 text-slate-400">{r.errorMessage ?? '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <DataTable
+        title="Recent sync runs"
+        headers={['Started', 'Source', 'Status', 'Imported', 'Skipped', 'Error']}
+        rows={runs.map((r) => [
+          r.startedAt.toISOString(),
+          r.source,
+          r.status,
+          r.importedCount,
+          r.skippedDuplicateCount,
+          r.errorMessage,
+        ])}
+      />
     </div>
   );
 }

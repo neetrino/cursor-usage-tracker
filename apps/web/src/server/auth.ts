@@ -34,3 +34,12 @@ export function adminCookieValue(): string {
 }
 
 export const ADMIN_COOKIE_NAME = 'cursor_usage_admin';
+
+export function verifyAdminSessionFromRequest(req: Request): boolean {
+  const cookieHeader = req.headers.get('cookie') ?? '';
+  const escaped = ADMIN_COOKIE_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = cookieHeader.match(new RegExp(`${escaped}=([^;]+)`));
+  if (!match?.[1]) return false;
+  const expected = adminCookieValue();
+  return Boolean(expected && match[1] === expected);
+}

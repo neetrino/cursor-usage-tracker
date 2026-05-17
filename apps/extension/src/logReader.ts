@@ -8,12 +8,17 @@ export async function readNewLinesSinceByteOffset(
 ): Promise<{ nextOffset: number; lines: string[] }> {
   const s = await stat(filePath);
   const size = s.size;
-  if (startByteOffset > size) {
+
+  let byteOffset = startByteOffset;
+  if (byteOffset < 0 || byteOffset > size) {
+    byteOffset = 0;
+  }
+  if (byteOffset >= size) {
     return { nextOffset: size, lines: [] };
   }
 
   const stream = createReadStream(filePath, {
-    start: startByteOffset,
+    start: byteOffset,
     end: size - 1,
     encoding: 'utf8',
   });

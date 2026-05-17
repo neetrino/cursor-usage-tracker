@@ -4,6 +4,45 @@ import type { Prisma } from '@prisma/client';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <svg
+        className="mb-4 h-10 w-10 text-[#333]"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        viewBox="0 0 24 24"
+        aria-hidden
+      >
+        <path d="M4 7h16M4 12h16M4 17h10" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <p className="text-sm text-[#666]">No local events match your filters.</p>
+    </div>
+  );
+}
+
+function FilterInput({
+  label,
+  name,
+  defaultValue,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+}) {
+  return (
+    <label className="block text-xs text-[#666]">
+      {label}
+      <input
+        className="mt-1.5 w-full rounded-xl border border-[#1f1f1f] bg-[#0a0a0a] px-3 py-2 text-sm text-[#e5e5e5] outline-none focus:border-[#6366f1]"
+        defaultValue={defaultValue}
+        name={name}
+      />
+    </label>
+  );
+}
+
 export default async function LocalEventsPage({
   searchParams,
 }: {
@@ -34,68 +73,66 @@ export default async function LocalEventsPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Local tracker events</h1>
-        <p className="mt-2 text-sm text-slate-400">Showing up to 200 rows.</p>
+        <h1 className="text-xl font-semibold text-[#e5e5e5]">Local events</h1>
+        <p className="mt-1 text-sm text-[#666]">Extension tracker events · up to 200 rows</p>
       </div>
 
       <form
+        className="grid gap-4 rounded-xl border border-[#1f1f1f] bg-[#111111] p-5 md:grid-cols-3"
         method="get"
-        className="grid gap-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4 md:grid-cols-3"
       >
-        <label className="text-sm text-slate-300">
-          From (ISO)
-          <input className="mt-1 w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-2 text-sm" name="from" defaultValue={from ?? ''} />
-        </label>
-        <label className="text-sm text-slate-300">
-          To (ISO)
-          <input className="mt-1 w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-2 text-sm" name="to" defaultValue={to ?? ''} />
-        </label>
-        <label className="text-sm text-slate-300">
-          owningUser
-          <input
-            className="mt-1 w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-2 text-sm"
-            name="owningUser"
-            defaultValue={owningUser ?? ''}
-          />
-        </label>
-        <label className="text-sm text-slate-300">
-          userKey
-          <input className="mt-1 w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-2 text-sm" name="userKey" defaultValue={userKey ?? ''} />
-        </label>
-        <div className="flex items-end">
-          <button className="w-full rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-white" type="submit">
+        <FilterInput defaultValue={from ?? ''} label="From (ISO)" name="from" />
+        <FilterInput defaultValue={to ?? ''} label="To (ISO)" name="to" />
+        <FilterInput defaultValue={owningUser ?? ''} label="owningUser" name="owningUser" />
+        <FilterInput defaultValue={userKey ?? ''} label="userKey" name="userKey" />
+        <div className="flex items-end md:col-span-2">
+          <button
+            className="w-full rounded-xl bg-[#6366f1] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            type="submit"
+          >
             Apply filters
           </button>
         </div>
       </form>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1000px] text-sm">
-          <thead className="text-left text-slate-400">
-            <tr>
-              <th className="py-2">Time (UTC)</th>
-              <th className="py-2">userKey</th>
-              <th className="py-2">userName</th>
-              <th className="py-2">computerId</th>
-              <th className="py-2">owningUser</th>
-              <th className="py-2">marker</th>
-              <th className="py-2">rawLineHash</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr className="border-t border-slate-800" key={r.id}>
-                <td className="py-2 font-mono text-xs">{r.timestampUtc.toISOString()}</td>
-                <td className="py-2">{r.userKey}</td>
-                <td className="py-2">{r.userName}</td>
-                <td className="py-2 font-mono text-xs">{r.computerId}</td>
-                <td className="py-2 font-mono text-xs">{r.owningUser}</td>
-                <td className="py-2">{r.marker}</td>
-                <td className="py-2 font-mono text-xs">{r.rawLineHash}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="overflow-hidden rounded-xl border border-[#1f1f1f] bg-[#111111]">
+        {rows.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead>
+                <tr className="border-b border-[#1f1f1f] text-left text-xs text-[#666]">
+                  <th className="px-4 py-3 font-medium">Time (UTC)</th>
+                  <th className="px-4 py-3 font-medium">userKey</th>
+                  <th className="px-4 py-3 font-medium">userName</th>
+                  <th className="px-4 py-3 font-medium">computerId</th>
+                  <th className="px-4 py-3 font-medium">owningUser</th>
+                  <th className="px-4 py-3 font-medium">marker</th>
+                  <th className="px-4 py-3 font-medium">rawLineHash</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr
+                    className="border-t border-[#1f1f1f] transition-colors hover:bg-[#1a1a1a]"
+                    key={r.id}
+                  >
+                    <td className="px-4 py-3 font-mono text-xs text-[#e5e5e5]">
+                      {r.timestampUtc.toISOString()}
+                    </td>
+                    <td className="px-4 py-3 text-[#e5e5e5]">{r.userKey}</td>
+                    <td className="px-4 py-3 text-[#e5e5e5]">{r.userName}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-[#666]">{r.computerId}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-[#666]">{r.owningUser}</td>
+                    <td className="px-4 py-3 text-[#666]">{r.marker}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-[#666]">{r.rawLineHash}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

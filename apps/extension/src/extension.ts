@@ -23,14 +23,9 @@ import { openPendingJsonPreview, openSettingsWebview } from './settingsWebview';
 import { asString, asUiMessage, isNonEmptyString } from './stringUtil';
 import { debugTrace, isDebugTraceEnabled } from './debugTrace';
 import { getDiagnosticChannel, logDiagnosticError, runWithDiagnostics, runWithDiagnosticsSync } from './diagnosticChannel';
-import {
-  CURSOR_USAGE_SYNC_INTERVAL_MS,
-  syncCursorUsage,
-} from './cursorUsageSync';
 
 let retryTimer: ReturnType<typeof setInterval> | undefined;
 let pollTimer: ReturnType<typeof setInterval> | undefined;
-let usageSyncTimer: ReturnType<typeof setInterval> | undefined;
 let fileWatcher: vscode.FileSystemWatcher | undefined;
 
 async function resolveLogPath(context: vscode.ExtensionContext): Promise<string | undefined> {
@@ -168,23 +163,8 @@ function disposeWatchers(): void {
     clearInterval(pollTimer);
     pollTimer = undefined;
   }
-  if (usageSyncTimer) {
-    clearInterval(usageSyncTimer);
-    usageSyncTimer = undefined;
-  }
   fileWatcher?.dispose();
   fileWatcher = undefined;
-}
-
-function startCursorUsageSync(context: vscode.ExtensionContext): void {
-  if (usageSyncTimer) {
-    clearInterval(usageSyncTimer);
-    usageSyncTimer = undefined;
-  }
-  usageSyncTimer = setInterval(() => {
-    void runWithDiagnostics('syncCursorUsage:interval', () => syncCursorUsage(context));
-  }, CURSOR_USAGE_SYNC_INTERVAL_MS);
-  void runWithDiagnostics('syncCursorUsage:initial', () => syncCursorUsage(context));
 }
 
 async function startWatchers(context: vscode.ExtensionContext): Promise<void> {
@@ -217,7 +197,6 @@ async function startWatchers(context: vscode.ExtensionContext): Promise<void> {
 
 function onSettingsChanged(context: vscode.ExtensionContext): void {
   void startWatchers(context);
-  startCursorUsageSync(context);
 }
 
 function registerOpenSettings(context: vscode.ExtensionContext): vscode.Disposable {
@@ -378,7 +357,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     await runWithDiagnostics('activate:startWatchers', () => startWatchers(context));
-    startCursorUsageSync(context);
   } catch (error) {
     logDiagnosticError('activate', error);
     throw error;

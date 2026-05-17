@@ -1,8 +1,28 @@
 import { importCursorUsageJson } from '@/server/cursor-usage-import';
+import { runManualCursorSync } from '@/server/cursor-usage-sync-manual';
 import { getPrisma } from '@/server/db';
 import { runMatchingPass } from '@/server/matching/runMatching';
 import { redirect } from 'next/navigation';
 import { requireAdminSession } from '@/server/admin-session-actions';
+
+export async function syncFromCursorNowAction(): Promise<void> {
+  'use server';
+  await requireAdminSession();
+  try {
+    const result = await runManualCursorSync(getPrisma());
+    if (result.clientSyncRequired) {
+      redirect(
+        `/dashboard/settings?syncHint=1&message=${encodeURIComponent(result.message ?? '')}`,
+      );
+    }
+    redirect(
+      `/dashboard/settings?synced=1&imported=${result.importedCount}&skipped=${result.skippedDuplicateCount}`,
+    );
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error';
+    redirect(`/dashboard/settings?syncError=${encodeURIComponent(message)}`);
+  }
+}
 
 export async function runMatchingNowAction(): Promise<void> {
   'use server';
