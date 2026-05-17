@@ -3,6 +3,7 @@ import { userInfo } from 'node:os';
 import { existsSync, statSync } from 'node:fs';
 import * as vscode from 'vscode';
 import {
+  clearAdminApiKey,
   clearPublicSettings,
   clearStatusSnapshots,
   clearTrackerApiKey,
@@ -10,6 +11,7 @@ import {
   hasTrackerApiKey,
   savePublicSettings,
   setLastBackendCheck,
+  storeAdminApiKey,
   storeTrackerApiKey,
   type ExtensionPublicSettings,
 } from './config';
@@ -58,6 +60,7 @@ function normalizedSavePayload(p: Record<string, unknown>): NormalizedSaveFormIn
   return {
     backendUrl: asString(p.backendUrl).trim(),
     trackerApiKey: asString(p.trackerApiKey).trim(),
+    adminApiKey: asString(p.adminApiKey).trim(),
     userKey: asString(p.userKey).trim(),
     userName: asString(p.userName).trim(),
     computerId: asString(p.computerId).trim(),
@@ -239,6 +242,7 @@ async function runReset(
   if (ok !== 'Reset') return;
   await clearPublicSettings(context);
   await clearTrackerApiKey(context);
+  await clearAdminApiKey(context);
   await clearStatusSnapshots(context);
   await onSettingsChanged();
   panel.webview.postMessage({ type: 'toast', message: 'Settings reset.', isError: false });
@@ -277,6 +281,9 @@ async function runSave(
   await savePublicSettings(context, publicSettings);
   if (isNonEmptyString(normalized.trackerApiKey)) {
     await storeTrackerApiKey(context, normalized.trackerApiKey);
+  }
+  if (isNonEmptyString(normalized.adminApiKey)) {
+    await storeAdminApiKey(context, normalized.adminApiKey);
   }
   await onSettingsChanged();
   panel.webview.postMessage({ type: 'toast', message: 'Settings saved.', isError: false });

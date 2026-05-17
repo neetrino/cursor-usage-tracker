@@ -3,6 +3,7 @@ import { asString, isNonEmptyString } from './stringUtil';
 
 const SECRET_TRACKER_KEY = 'cursorUsageTracker.trackerApiKey';
 const SECRET_LEGACY_API_KEY = 'cursorUsageTracker.apiKey';
+const SECRET_ADMIN_KEY = 'cursorUsageTracker.adminApiKey';
 
 const GS = {
   backendUrl: 'cut.settings.backendUrl',
@@ -15,6 +16,7 @@ const GS = {
   lastBackendCheck: 'cut.status.lastBackendCheck',
   lastMarker: 'cut.status.lastMarker',
   lastSync: 'cut.status.lastSync',
+  lastCursorUsageSync: 'cut.status.lastCursorUsageSync',
 } as const;
 
 export type ExtensionPublicSettings = {
@@ -46,6 +48,15 @@ export type LastSyncStatus = {
   sent: number;
   failed: number;
   remaining: number;
+};
+
+export type LastCursorUsageSyncStatus = {
+  ok: boolean;
+  message: string;
+  atIso: string;
+  eventCount: number;
+  importedCount: number;
+  skippedDuplicateCount: number;
 };
 
 function cfg(): vscode.WorkspaceConfiguration {
@@ -120,6 +131,25 @@ export async function clearTrackerApiKey(context: vscode.ExtensionContext): Prom
   await context.secrets.delete(SECRET_LEGACY_API_KEY);
 }
 
+export async function hasAdminApiKey(context: vscode.ExtensionContext): Promise<boolean> {
+  const key = await getAdminApiKey(context);
+  return isNonEmptyString(key);
+}
+
+export async function getAdminApiKey(context: vscode.ExtensionContext): Promise<string | undefined> {
+  const raw = await context.secrets.get(SECRET_ADMIN_KEY);
+  const trimmed = asString(raw).trim();
+  return isNonEmptyString(trimmed) ? trimmed : undefined;
+}
+
+export async function storeAdminApiKey(context: vscode.ExtensionContext, apiKey: string): Promise<void> {
+  await context.secrets.store(SECRET_ADMIN_KEY, asString(apiKey).trim());
+}
+
+export async function clearAdminApiKey(context: vscode.ExtensionContext): Promise<void> {
+  await context.secrets.delete(SECRET_ADMIN_KEY);
+}
+
 export type SavePublicSettingsInput = ExtensionPublicSettings;
 
 export async function saveCursorLogPath(context: vscode.ExtensionContext, cursorLogPath: string): Promise<void> {
@@ -151,6 +181,7 @@ export async function clearStatusSnapshots(context: vscode.ExtensionContext): Pr
   await context.globalState.update(GS.lastBackendCheck, undefined);
   await context.globalState.update(GS.lastMarker, undefined);
   await context.globalState.update(GS.lastSync, undefined);
+  await context.globalState.update(GS.lastCursorUsageSync, undefined);
 }
 
 export async function getLastBackendCheck(context: vscode.ExtensionContext): Promise<LastBackendCheck | undefined> {
@@ -210,4 +241,27 @@ export async function getLastSync(context: vscode.ExtensionContext): Promise<Las
 
 export async function setLastSync(context: vscode.ExtensionContext, value: LastSyncStatus): Promise<void> {
   await context.globalState.update(GS.lastSync, JSON.stringify(value));
+}
+
+export async function getLastCursorUsageSync(
+  context: vscode.ExtensionContext,
+): Promise<LastCursorUsageSyncStatus | undefined> {
+  const raw = context.globalState.get<string>(GS.lastCursorUsageSync);
+  if (!isNonEmptyString(raw)) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed === 'object' && parsed !== null && 'ok' in parsed) {
+      return parsed as LastCursorUsageSyncStatus;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+export async function setLastCursorUsageSync(
+  context: vscode.ExtensionContext,
+  value: LastCursorUsageSyncStatus,
+): Promise<void> {
+  await context.globalState.update(GS.lastCursorUsageSync, JSON.stringify(value));
 }

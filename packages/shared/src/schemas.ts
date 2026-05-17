@@ -13,7 +13,8 @@ export const cursorUsageApiEventSchema = z.object({
     .object({
       inputTokens: z.number(),
       outputTokens: z.number(),
-      cacheReadTokens: z.number(),
+      cacheReadTokens: z.number().optional().default(0),
+      cacheWriteTokens: z.number().optional(),
       totalCents: z.number().optional(),
     })
     .optional(),

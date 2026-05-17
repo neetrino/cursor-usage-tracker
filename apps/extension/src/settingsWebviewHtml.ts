@@ -82,6 +82,14 @@ export function renderSettingsWebviewHtml(params: {
     <div class="err" id="err-trackerApiKey"></div>
   </div>
 
+  <h2>Cursor usage sync</h2>
+  <div class="row">
+    <label for="adminApiKey">Admin API Key (required for usage CSV import, stored securely)</label>
+    <input id="adminApiKey" type="password" autocomplete="off" />
+    <div class="hint" id="adminKeyHint">Matches server ADMIN_API_KEY. Extension fetches Cursor usage CSV every 10 minutes when saved.</div>
+    <div class="err" id="err-adminApiKey"></div>
+  </div>
+
   <h2>User identity</h2>
   <div class="row">
     <label for="userKey">User Key (required)</label>
@@ -157,7 +165,7 @@ export function renderSettingsWebviewHtml(params: {
     }
     function setErr(id, msg) { const el = $(id); if (el) el.textContent = msg || ''; }
     function clearErrors() {
-      ['backendUrl','trackerApiKey','userKey','userName','computerId','owningUser','cursorLogPath'].forEach(function (k) {
+      ['backendUrl','trackerApiKey','adminApiKey','userKey','userName','computerId','owningUser','cursorLogPath'].forEach(function (k) {
         setErr('err-' + k, '');
       });
     }
@@ -196,6 +204,7 @@ export function renderSettingsWebviewHtml(params: {
       return {
         backendUrl: inputVal('backendUrl').trim(),
         trackerApiKey: inputVal('trackerApiKey'),
+        adminApiKey: inputVal('adminApiKey'),
         userKey: inputVal('userKey').trim(),
         userName: inputVal('userName').trim(),
         computerId: inputVal('computerId').trim(),
@@ -217,6 +226,7 @@ export function renderSettingsWebviewHtml(params: {
         'Last backend check: ' + (s.lastBackend || 'Not tested yet'),
         'Last marker: ' + (s.lastMarker || '—'),
         'Last sync: ' + (s.lastSync || '—'),
+        'Last Cursor usage sync: ' + (s.lastCursorUsageSync || '—'),
       ];
       el.textContent = lines.join('\\n');
     }
@@ -230,11 +240,18 @@ export function renderSettingsWebviewHtml(params: {
       setInput('owningUser', s.settings.owningUser);
       setInput('cursorLogPath', s.settings.cursorLogPath);
       setInput('trackerApiKey', '');
+      setInput('adminApiKey', '');
       var hint = $('apiKeyHint');
       if (hint) {
         hint.textContent = s.hasApiKey
           ? 'A key is already saved. Leave blank to keep it; enter a new value to replace.'
           : 'Enter your tracker API key (matches server TRACKER_API_KEY).';
+      }
+      var adminHint = $('adminKeyHint');
+      if (adminHint) {
+        adminHint.textContent = s.hasAdminKey
+          ? 'Admin key saved. Leave blank to keep it; enter a new value to replace. Fetches Cursor usage CSV every 10 minutes.'
+          : 'Enter admin API key (matches server ADMIN_API_KEY) to import usage from Cursor dashboard CSV.';
       }
       applyAccountGroup(s.settings.cursorAccountGroup || 'ultra_1');
       renderStatus(s);

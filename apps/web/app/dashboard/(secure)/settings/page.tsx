@@ -1,9 +1,5 @@
 import { getPrisma } from '@/server/db';
-import {
-  importCursorUsageJsonAction,
-  runMatchingNowAction,
-  syncCursorUsageNowAction,
-} from '@/server/dashboard-actions';
+import { importCursorUsageJsonAction, runMatchingNowAction } from '@/server/dashboard-actions';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -22,17 +18,14 @@ export default async function SettingsPage({
   });
   const runs = await prisma.syncRun.findMany({ orderBy: { startedAt: 'desc' }, take: 25 });
 
-  const syncEnabled = (process.env.CURSOR_USAGE_SYNC_ENABLED ?? 'false').toLowerCase() === 'true';
-  const hasApiUrl = Boolean(process.env.CURSOR_USAGE_API_URL);
-  const hasHeaders = Boolean(process.env.CURSOR_USAGE_HEADERS_JSON);
-
   return (
     <div className="space-y-10">
       <div>
         <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Server-side sync uses <code className="text-slate-200">CURSOR_USAGE_*</code> env vars and
-          never exposes secrets to the browser.
+          Usage data is imported via Tampermonkey (
+          <code className="text-slate-200">tampermonkey-cursor-sync.js</code>) or manual JSON below.
+          Matching runs hourly in the worker.
         </p>
       </div>
 
@@ -44,16 +37,6 @@ export default async function SettingsPage({
       {typeof sp.importError === 'string' ? (
         <p className="rounded-md border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-200">
           Import error: {sp.importError}
-        </p>
-      ) : null}
-      {sp.synced === '1' ? (
-        <p className="rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200">
-          Sync completed.
-        </p>
-      ) : null}
-      {typeof sp.syncError === 'string' ? (
-        <p className="rounded-md border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-200">
-          Sync error: {sp.syncError}
         </p>
       ) : null}
       {sp.matched === '1' ? (
@@ -68,27 +51,7 @@ export default async function SettingsPage({
       ) : null}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-medium">API status</h2>
-        <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-4 text-sm text-slate-300">
-          <div>
-            CURSOR_USAGE_SYNC_ENABLED: <span className="font-mono">{String(syncEnabled)}</span>
-          </div>
-          <div>
-            CURSOR_USAGE_API_URL set: <span className="font-mono">{String(hasApiUrl)}</span>
-          </div>
-          <div>
-            CURSOR_USAGE_HEADERS_JSON set: <span className="font-mono">{String(hasHeaders)}</span>
-          </div>
-        </div>
-        <form action={syncCursorUsageNowAction}>
-          <button
-            className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-white disabled:opacity-40"
-            disabled={!syncEnabled || !hasApiUrl}
-            type="submit"
-          >
-            Sync Cursor usage now
-          </button>
-        </form>
+        <h2 className="text-lg font-medium">Matching</h2>
         <form action={runMatchingNowAction}>
           <button className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-900" type="submit">
             Run matching now

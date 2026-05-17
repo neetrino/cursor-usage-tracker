@@ -2,8 +2,10 @@ import { existsSync, statSync } from 'node:fs';
 import type { ExtensionContext } from 'vscode';
 import {
   getLastBackendCheck,
+  getLastCursorUsageSync,
   getLastMarker,
   getLastSync,
+  hasAdminApiKey,
   hasTrackerApiKey,
   loadPublicSettings,
   type ExtensionPublicSettings,
@@ -25,6 +27,7 @@ function isValidBackendUrl(url: string): boolean {
 export type WebviewStatePayload = {
   settings: ExtensionPublicSettings;
   hasApiKey: boolean;
+  hasAdminKey: boolean;
   pendingCount: number;
   extensionVersion: string;
   logPathDisplay: string;
@@ -32,6 +35,7 @@ export type WebviewStatePayload = {
   lastBackend: string;
   lastMarker: string;
   lastSync: string;
+  lastCursorUsageSync: string;
 };
 
 export async function buildWebviewState(context: ExtensionContext): Promise<WebviewStatePayload> {
@@ -63,9 +67,15 @@ export async function buildWebviewState(context: ExtensionContext): Promise<Webv
     ? `sent=${ls.sent} failed=${ls.failed} remaining=${ls.remaining} @ ${asString(ls.atIso)}`
     : '';
 
+  const lcu = await getLastCursorUsageSync(context);
+  const lastCursorUsageSync = lcu
+    ? `${lcu.ok ? 'OK' : 'FAIL'} — ${asString(lcu.message)} (events=${lcu.eventCount} imported=${lcu.importedCount} skipped=${lcu.skippedDuplicateCount}) @ ${asString(lcu.atIso)}`
+    : '';
+
   return {
     settings,
     hasApiKey: await hasTrackerApiKey(context),
+    hasAdminKey: await hasAdminApiKey(context),
     pendingCount,
     extensionVersion: version,
     logPathDisplay: logPath || '(not set)',
@@ -73,12 +83,14 @@ export async function buildWebviewState(context: ExtensionContext): Promise<Webv
     lastBackend,
     lastMarker,
     lastSync,
+    lastCursorUsageSync,
   };
 }
 
 export type NormalizedSaveFormInput = {
   backendUrl: string;
   trackerApiKey: string;
+  adminApiKey: string;
   userKey: string;
   userName: string;
   computerId: string;

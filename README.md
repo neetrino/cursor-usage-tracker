@@ -2,14 +2,14 @@
 
 Internal monorepo for attributing shared Cursor Ultra usage to real people by correlating:
 
-- **Cursor usage events** (imported JSON and/or optional server-side sync)
+- **Cursor usage events** (Tampermonkey hourly import and/or manual JSON)
 - **Local AI-start markers** from Cursor Window logs (VS Code extension)
 
 ## Repo layout
 
 - `apps/web` — Next.js (dashboard + route handlers + Prisma)
 - `apps/extension` — VS Code/Cursor-compatible extension
-- `apps/worker` — scheduled sync + matching
+- `apps/worker` — hourly matching pass
 - `packages/shared` — Zod schemas, types, hashes, time helpers
 
 ## Prerequisites
@@ -32,12 +32,6 @@ At minimum set:
 - `DATABASE_URL` (see notes below)
 - `TRACKER_API_KEY` (extension → `POST /api/tracker/events`, `GET /api/tracker/health`)
 - `ADMIN_API_KEY` (dashboard login + admin curl routes)
-
-Optional Cursor usage sync (server-only):
-
-- `CURSOR_USAGE_SYNC_ENABLED`
-- `CURSOR_USAGE_API_URL`
-- `CURSOR_USAGE_HEADERS_JSON`
 
 Matching thresholds:
 
@@ -76,7 +70,13 @@ One-shot:
 pnpm worker:once
 ```
 
-The worker loads root `.env` first, then imports the same Prisma/matching modules as the web app.
+The worker loads root `.env` first, then runs `runMatchingPass` every hour (same Prisma module as the web app).
+
+## Cursor usage import (Tampermonkey)
+
+Install `tampermonkey-cursor-sync.js` in Tampermonkey while logged into [cursor.com](https://cursor.com). Edit `CONFIG.ADMIN_API_KEY` to match `ADMIN_API_KEY` on the server. The script fetches the last hour from `POST /api/dashboard/get-filtered-usage-events` and POSTs to `/api/cursor-usage/import` hourly.
+
+In Coolify, remove legacy env vars if present: `CURSOR_USAGE_SYNC_ENABLED`, `CURSOR_USAGE_API_URL`, `CURSOR_USAGE_HEADERS_JSON`.
 
 ## Build and package the extension
 
