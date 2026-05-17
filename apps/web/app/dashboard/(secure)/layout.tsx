@@ -11,6 +11,7 @@ function TopBar() {
   const nav = [
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/dashboard/events', label: 'Events' },
+    { href: '/dashboard/local-events', label: 'Local Events' },
     { href: '/dashboard/settings', label: 'Settings' },
   ];
 
