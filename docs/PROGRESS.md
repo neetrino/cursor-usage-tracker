@@ -41,6 +41,7 @@
 ## Phase 8 — Dashboard
 
 - [x] Summary + tables + settings + server actions
+- [x] Settings **Danger Zone → Clear History** (admin-only; deletes `LocalAiEvent`, `CursorUsageEvent`, `SyncRun`; keeps users/accounts)
 
 ## Phase 9 — Extension
 

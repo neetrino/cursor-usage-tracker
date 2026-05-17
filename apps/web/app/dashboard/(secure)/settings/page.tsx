@@ -1,5 +1,7 @@
 import { getPrisma } from '@/server/db';
+import { getHistoryCounts } from '@/server/clear-history';
 import { importCursorUsageJsonAction, runMatchingNowAction } from '@/server/dashboard-actions';
+import { ClearHistoryDangerZone } from './ClearHistoryDangerZone';
 import { SyncFromCursorButton } from './SyncFromCursorButton';
 
 export const dynamic = 'force-dynamic';
@@ -74,6 +76,7 @@ export default async function SettingsPage({
     include: { cursorAccount: true },
   });
   const runs = await prisma.syncRun.findMany({ orderBy: { startedAt: 'desc' }, take: 25 });
+  const historyCounts = await getHistoryCounts(prisma);
 
   return (
     <div className="space-y-8">
@@ -171,6 +174,8 @@ export default async function SettingsPage({
           r.errorMessage,
         ])}
       />
+
+      <ClearHistoryDangerZone initialCounts={historyCounts} />
     </div>
   );
 }

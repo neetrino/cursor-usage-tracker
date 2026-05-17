@@ -119,6 +119,18 @@ curl -sS -H "x-admin-api-key: $ADMIN_API_KEY" -H "content-type: application/json
   -d @payload.json http://localhost:3000/api/cursor-usage/import
 ```
 
+### Clear tracking history (dashboard)
+
+Use **Settings → Danger Zone → Clear History**. You must type `CLEAR HISTORY` in the confirmation dialog. This removes all local extension events, imported Cursor usage events, and sync run history from SQLite. It does **not** delete `InternalUser`, `CursorAccount`, or the database file.
+
+API (admin session cookie or `x-admin-api-key` only):
+
+```bash
+curl -sS -H "x-admin-api-key: $ADMIN_API_KEY" http://localhost:3000/api/admin/history-counts
+curl -sS -X POST -H "x-admin-api-key: $ADMIN_API_KEY" -H "content-type: application/json" \
+  -d '{"confirmation":"CLEAR HISTORY"}' http://localhost:3000/api/admin/clear-history
+```
+
 ### Run matching
 
 Use **Settings → Run matching now** or:
