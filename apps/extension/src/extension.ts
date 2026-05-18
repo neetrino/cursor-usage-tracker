@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { existsSync, statSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import {
   createLocalEventRawHash,
   normalizeRawLine,
@@ -8,15 +8,18 @@ import {
   toUtcIso,
 } from '@cursor-usage-tracker/shared';
 import { postTrackerEvents } from './backendClient';
-import { discoverCursorLogFiles, testLogDetection } from './logDiscovery';
-import { detectMarker } from './markers';
+import { testLogDetection } from './logDiscovery';
+import { refreshActiveLogPath } from './logSession';
+import { detectCanonicalMarker, PRIMARY_MARKER } from './markers';
 import { readNewLinesSinceByteOffset } from './logReader';
 import { flushPendingQueue, getPendingCount } from './queue';
 import {
-  getTrackerApiKey,
+  getTrackerAuthCredential,
   loadPublicSettings,
   saveCursorLogPath,
+  setLastEventSent,
   setLastMarker,
+  setLogFileLastWriteTime,
 } from './config';
 import { enqueue, getLogBytePosition, setLogBytePosition } from './storage';
 import { openPendingJsonPreview, openSettingsWebview } from './settingsWebview';
@@ -26,89 +29,81 @@ import { getDiagnosticChannel, logDiagnosticError, runWithDiagnostics, runWithDi
 
 let retryTimer: ReturnType<typeof setInterval> | undefined;
 let pollTimer: ReturnType<typeof setInterval> | undefined;
+let discoveryTimer: ReturnType<typeof setInterval> | undefined;
 let fileWatcher: vscode.FileSystemWatcher | undefined;
+let tailInFlight: Promise<void> | undefined;
+let activeLogPath: string | undefined;
+let lastTailErrorKey: string | undefined;
 
-async function resolveLogPath(context: vscode.ExtensionContext): Promise<string | undefined> {
+async function resolveLogPath(context: vscode.ExtensionContext, forceDiscover = false): Promise<string | undefined> {
   const settings = loadPublicSettings(context);
-  const logPath = asString(settings.cursorLogPath).trim();
-  if (isNonEmptyString(logPath)) {
-    return logPath;
+  const manual = asString(settings.cursorLogPath).trim();
+  if (isNonEmptyString(manual) && existsSync(manual) && statSync(manual).isFile() && !forceDiscover) {
+    return manual;
   }
-  const found = await discoverCursorLogFiles();
-  return found[0]?.path;
+  return refreshActiveLogPath(context, forceDiscover);
 }
 
 async function buildPayload(
   context: vscode.ExtensionContext,
   line: string,
-  marker: 'buildRequestedModel' | 'wakelock_acquired',
 ): Promise<Record<string, string | number>> {
-  try {
-    const settings = loadPublicSettings(context);
-    const userKey = asString(settings.userKey).trim();
-    const userName = asString(settings.userName).trim();
-    const computerId = asString(settings.computerId).trim();
-    const owningUser = asString(settings.owningUser).trim();
+  const settings = loadPublicSettings(context);
+  const userKey = asString(settings.userKey).trim();
+  const userName = asString(settings.userName).trim();
+  const computerId = asString(settings.computerId).trim();
+  const owningUser = asString(settings.owningUser).trim();
+  const marker = 'buildRequestedModel' as const;
 
-    const timestampMs = parseCursorLocalLogTimestampToMs(line);
-    const normalized = normalizeRawLine(line);
-    const rawLineHash = createLocalEventRawHash({
-      userKey,
-      computerId,
-      owningUser,
-      timestampMs,
-      marker,
-      normalizedRawLine: normalized,
-    });
+  const timestampMs = parseCursorLocalLogTimestampToMs(line);
+  const normalized = normalizeRawLine(line);
+  const rawLineHash = createLocalEventRawHash({
+    userKey,
+    computerId,
+    owningUser,
+    timestampMs,
+    marker,
+    normalizedRawLine: normalized,
+  });
 
-    return {
-      userKey,
-      userName,
-      computerId,
-      owningUser,
-      timestampMs: Number(timestampMs),
-      timestampUtc: toUtcIso(timestampMs),
-      source: 'cursor_window_log',
-      marker,
-      rawLineHash,
-    };
-  } catch (error) {
-    logDiagnosticError('buildPayload', error);
-    throw error;
-  }
+  return {
+    userKey,
+    userName,
+    computerId,
+    owningUser,
+    timestampMs: Number(timestampMs),
+    timestampUtc: toUtcIso(timestampMs),
+    source: 'cursor_window_log',
+    marker,
+    rawLineHash,
+  };
 }
 
 async function sendImmediate(context: vscode.ExtensionContext, payload: unknown): Promise<void> {
   const settings = loadPublicSettings(context);
   const baseUrl = asString(settings.backendUrl).trim().replace(/\/+$/, '');
-  const apiKey = await getTrackerApiKey(context);
-  if (!baseUrl || !apiKey) {
-    throw new Error('Missing backendUrl or tracker API key (open Settings).');
+  const auth = await getTrackerAuthCredential(context);
+  if (!baseUrl || !auth) {
+    throw new Error('Missing backendUrl or device token (open Settings).');
   }
-  await postTrackerEvents({ baseUrl, apiKey, events: [payload] });
+  await postTrackerEvents({ baseUrl, auth, events: [payload] });
+  await setLastEventSent(context, {
+    atIso: new Date().toISOString(),
+    marker: 'buildRequestedModel',
+  });
 }
 
 async function processLine(context: vscode.ExtensionContext, line: string): Promise<void> {
-  if (typeof line !== 'string') {
-    debugTrace('processLine:invalidLine', {
-      lineType: typeof line,
-      lineIsNullish: line == null,
-    });
-    return;
-  }
+  if (typeof line !== 'string') return;
+
+  const marker = detectCanonicalMarker(line);
+  if (!marker) return;
 
   try {
-    const marker = detectMarker(line);
-    if (!marker) return;
-
-    const payload = await buildPayload(context, line, marker);
-    const markerLabel =
-      marker === 'buildRequestedModel'
-        ? '[buildRequestedModel]'
-        : '[ComposerWakelockManager] Acquired wakelock reason="agent-loop"';
+    const payload = await buildPayload(context, line);
 
     await setLastMarker(context, {
-      marker: markerLabel,
+      marker: PRIMARY_MARKER,
       markerType: marker,
       timestampMs: Number(payload.timestampMs),
       timestampUtc: String(payload.timestampUtc),
@@ -126,32 +121,61 @@ async function processLine(context: vscode.ExtensionContext, line: string): Prom
   }
 }
 
-async function tailOnce(context: vscode.ExtensionContext): Promise<void> {
-  try {
-    const logPath = await resolveLogPath(context);
-    if (!logPath) return;
+async function tailOnceInner(context: vscode.ExtensionContext): Promise<void> {
+  const logPath = await resolveLogPath(context);
+  if (!logPath) return;
 
-    const pos = await getLogBytePosition(context, logPath);
-    const { nextOffset, lines } = await readNewLinesSinceByteOffset(logPath, pos);
-    await setLogBytePosition(context, logPath, nextOffset);
-
-    if (isDebugTraceEnabled() && lines.length > 0) {
-      const first = lines[0];
-      debugTrace('tailOnce:lines', {
-        count: lines.length,
-        firstType: typeof first,
-        firstLen: typeof first === 'string' ? first.length : -1,
-        nextOffset,
-      });
-    }
-
-    for (const line of lines) {
-      await processLine(context, line);
-    }
-  } catch (error) {
-    logDiagnosticError('tailOnce', error);
-    throw error;
+  if (!existsSync(logPath)) {
+    activeLogPath = undefined;
+    await refreshActiveLogPath(context, true);
+    return;
   }
+
+  try {
+    const s = await stat(logPath);
+    await setLogFileLastWriteTime(context, s.mtimeMs);
+  } catch {
+    activeLogPath = undefined;
+    return;
+  }
+
+  const pos = await getLogBytePosition(context, logPath);
+  const { nextOffset, lines, truncated } = await readNewLinesSinceByteOffset(logPath, pos);
+  await setLogBytePosition(context, logPath, nextOffset);
+
+  if (truncated && lines.length > 0) {
+    debugTrace('tailOnce:truncated', { logPathLen: logPath.length, nextOffset });
+  }
+
+  if (isDebugTraceEnabled() && lines.length > 0) {
+    debugTrace('tailOnce:lines', { count: lines.length, nextOffset });
+  }
+
+  for (const line of lines) {
+    await processLine(context, line);
+  }
+}
+
+async function tailOnce(context: vscode.ExtensionContext): Promise<void> {
+  if (tailInFlight) {
+    return tailInFlight;
+  }
+  tailInFlight = (async () => {
+    try {
+      await tailOnceInner(context);
+      lastTailErrorKey = undefined;
+    } catch (error) {
+      const key = error instanceof Error ? error.message : String(error);
+      if (lastTailErrorKey !== key) {
+        lastTailErrorKey = key;
+        logDiagnosticError('tailOnce', error);
+      }
+      throw error;
+    } finally {
+      tailInFlight = undefined;
+    }
+  })();
+  return tailInFlight;
 }
 
 function disposeWatchers(): void {
@@ -163,36 +187,48 @@ function disposeWatchers(): void {
     clearInterval(pollTimer);
     pollTimer = undefined;
   }
+  if (discoveryTimer) {
+    clearInterval(discoveryTimer);
+    discoveryTimer = undefined;
+  }
   fileWatcher?.dispose();
   fileWatcher = undefined;
 }
 
 async function startWatchers(context: vscode.ExtensionContext): Promise<void> {
-  try {
-    disposeWatchers();
+  disposeWatchers();
 
-    const logPath = await resolveLogPath(context);
-    if (!logPath) {
-      return;
-    }
-
-    fileWatcher = vscode.workspace.createFileSystemWatcher(logPath);
-    fileWatcher.onDidChange(() => {
-      void runWithDiagnostics('tailOnce:onDidChange', () => tailOnce(context));
-    });
-    context.subscriptions.push(fileWatcher);
-
-    pollTimer = setInterval(() => {
-      void runWithDiagnostics('tailOnce:poll', () => tailOnce(context));
-    }, 2000);
-
-    retryTimer = setInterval(() => {
-      void runWithDiagnostics('flushPendingQueue:interval', () => flushPendingQueue(context));
-    }, 60_000);
-  } catch (error) {
-    logDiagnosticError('startWatchers', error);
-    throw error;
+  const logPath = await resolveLogPath(context, true);
+  if (!logPath) {
+    return;
   }
+  activeLogPath = logPath;
+
+  fileWatcher = vscode.workspace.createFileSystemWatcher(logPath);
+  fileWatcher.onDidChange(() => {
+    void runWithDiagnostics('tailOnce:onDidChange', () => tailOnce(context));
+  });
+  context.subscriptions.push(fileWatcher);
+
+  pollTimer = setInterval(() => {
+    void runWithDiagnostics('tailOnce:poll', () => tailOnce(context));
+  }, 2000);
+
+  discoveryTimer = setInterval(() => {
+    void runWithDiagnostics('discovery:interval', async () => {
+      const next = await refreshActiveLogPath(context);
+      if (next && next !== activeLogPath) {
+        activeLogPath = next;
+        await startWatchers(context);
+      }
+    });
+  }, 45_000);
+
+  retryTimer = setInterval(() => {
+    void runWithDiagnostics('flushPendingQueue:interval', () => flushPendingQueue(context));
+  }, 60_000);
+
+  await tailOnce(context);
 }
 
 function onSettingsChanged(context: vscode.ExtensionContext): void {
@@ -245,42 +281,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             filters: { 'Log files': ['log'], 'All files': ['*'] },
           });
 
-        if (!picked || picked.length === 0) {
-          vscode.window.showInformationMessage('Cursor log path setup cancelled.');
-          return;
-        }
+          if (!picked || picked.length === 0) {
+            vscode.window.showInformationMessage('Cursor log path setup cancelled.');
+            return;
+          }
 
-        const logPathRaw = picked[0]?.fsPath;
-        if (!isNonEmptyString(logPathRaw)) {
-          vscode.window.showInformationMessage('Cursor log path setup cancelled.');
-          return;
-        }
+          const logPathRaw = picked[0]?.fsPath;
+          if (!isNonEmptyString(logPathRaw)) {
+            vscode.window.showInformationMessage('Cursor log path setup cancelled.');
+            return;
+          }
 
-        const logPath = asString(logPathRaw).trim();
+          const logPath = asString(logPathRaw).trim();
 
-        if (!existsSync(logPath)) {
-          vscode.window.showErrorMessage('Cursor log file does not exist.');
-          return;
-        }
+          if (!existsSync(logPath)) {
+            vscode.window.showErrorMessage('Cursor log file does not exist.');
+            return;
+          }
 
-        let isFile = false;
-        try {
-          isFile = statSync(logPath).isFile();
-        } catch {
-          vscode.window.showErrorMessage('Cursor log file does not exist.');
-          return;
-        }
+          let isFile = false;
+          try {
+            isFile = statSync(logPath).isFile();
+          } catch {
+            vscode.window.showErrorMessage('Cursor log file does not exist.');
+            return;
+          }
 
-        if (!isFile) {
-          vscode.window.showErrorMessage('Cursor log path must be a file, not a directory.');
-          return;
-        }
+          if (!isFile) {
+            vscode.window.showErrorMessage('Cursor log path must be a file, not a directory.');
+            return;
+          }
 
-        await saveCursorLogPath(context, logPath);
-        await startWatchers(context);
-        vscode.window.showInformationMessage(
-          asUiMessage(`Cursor Usage Tracker: log path set to ${logPath}`, 'Cursor Usage Tracker: log path saved.'),
-        );
+          await saveCursorLogPath(context, logPath);
+          await startWatchers(context);
+          vscode.window.showInformationMessage(
+            asUiMessage(`Cursor Usage Tracker: log path set to ${logPath}`, 'Cursor Usage Tracker: log path saved.'),
+          );
         } catch (err) {
           logDiagnosticError('command:setLogPath', err);
           const message = asUiMessage(
@@ -296,10 +332,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.commands.registerCommand('cursorUsageTracker.testLogDetection', async () => {
         await runWithDiagnostics('command:testLogDetection', async () => {
           const logPath = await resolveLogPath(context);
-          debugTrace('command:testLogDetection', {
-            hasLogPath: Boolean(logPath),
-            logPathLen: typeof logPath === 'string' ? logPath.length : 0,
-          });
           if (!logPath) {
             vscode.window.showWarningMessage('No Cursor log path configured or discovered.');
             return;

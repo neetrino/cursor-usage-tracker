@@ -30,13 +30,14 @@ Copy `.env.example` to the **repo root** `.env`. Next.js uses `envDir` (see `app
 At minimum set:
 
 - `DATABASE_URL` (see notes below)
-- `TRACKER_API_KEY` (extension → `POST /api/tracker/events`, `GET /api/tracker/health`)
-- `ADMIN_API_KEY` (dashboard login + admin curl routes)
+- `TRACKER_API_KEY` (optional legacy dev fallback for extension; production uses per-device tokens)
+- `ADMIN_API_KEY` (dashboard login + admin curl routes; **not** used by the extension)
 
-Matching thresholds:
+Matching / dedupe thresholds:
 
 - `MATCH_MAX_DIFF_MS` (default `3000`)
-- `MATCH_AUTO_CONFIDENT_MS` (default `1000`)
+- `MATCH_AUTO_CONFIDENT_MS` (default `500`)
+- `LOCAL_MARKER_DEDUPE_MS` (default `3000`, backend insert dedupe)
 
 ## Database migrations + seed
 
@@ -97,16 +98,22 @@ Install in Cursor:
 Use **Cursor Usage Tracker: Open Settings** (or **Setup**, which opens the same panel). One webview collects:
 
 - **Backend URL** (example `http://localhost:3000`)
-- **Tracker API key** (matches server `TRACKER_API_KEY`) — stored only in VS Code **SecretStorage**, never in `globalState` or logs
+- **Device token** — generate in dashboard **Settings → Device tokens** (paste once; stored in VS Code **SecretStorage**). This is **not** the admin API key or global `TRACKER_API_KEY`.
 - **userKey**, **userName**, **computerId**, **owningUser** (must match your `InternalUser` seed + Cursor usage JSON `owningUser`)
 - **Cursor Account Group** (`ultra_1`, `ultra_2`, or custom label — optional metadata for your own reference)
-- **Cursor log path** — use **Auto Discover** / **Browse File** / **Test Log Detection** from the panel
+- **Cursor log path** (optional manual override) — auto-discovery runs on activate and every ~45s
 
-Non-secret values are saved in the extension **globalState** (with a one-time fallback to legacy workspace settings if present). **Test Backend Connection** calls `GET /api/tracker/health` with `x-tracker-api-key`.
+Non-secret values are saved in extension **globalState**. **Test Backend Connection** calls `GET /api/tracker/health` with `Authorization: Bearer <deviceToken>`.
 
-Optional palette commands still work: **Set Cursor Log Path**, **Test Log Detection**, **Show Pending Events** (opens a JSON preview + count), **Sync Now**.
+Optional palette commands: **Set Cursor Log Path**, **Test Log Detection**, **Show Pending Events**, **Sync Now** (flush pending queue).
 
-On Windows, **Auto Discover** scans `%APPDATA%\\Cursor\\logs\\**\\*.log`, scores recent files by marker hits, and prefers `renderer.log` when scores tie.
+### Local markers
+
+- **Canonical event:** `[buildRequestedModel]` in `%APPDATA%\Cursor\logs\**\window*\renderer.log` — one `LocalAiEvent` per AI prompt.
+- **Diagnostic only:** Composer wakelock `agent-loop` lines (visible in **Test Log Detection**, never sent as events).
+- **Log time:** `renderer.log` timestamps are **local machine time**; the extension converts to UTC/`timestampMs`. Cursor usage UI may show UTC — typical match diff is **20–250ms**, occasional **1–2s**, `MATCH_MAX_DIFF_MS` default **3000ms**.
+
+On Windows, auto-discovery scans `%APPDATA%\Cursor\logs` for `window*\renderer.log`, ranks by newest mtime and recent `[buildRequestedModel]` hits, and switches when Cursor restarts into a new log folder.
 
 ## Operational workflows
 

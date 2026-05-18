@@ -1,6 +1,8 @@
 import { getPrisma } from '@/server/db';
-import { verifyTrackerApiKey } from '@/server/auth';
+import { resolveTrackerAuth } from '@/server/auth';
+import { readLocalMarkerDedupeMs, shouldSkipLocalMarkerInsert } from '@/server/local-marker-dedupe';
 import { trackerEventsRequestSchema } from '@cursor-usage-tracker/shared/schemas';
+import type { LocalAiEventPayload } from '@cursor-usage-tracker/shared/schemas';
 import { runMatchingPass } from '@/server/matching/runMatching';
 import { jsonResponse } from '@/server/http';
 
@@ -10,20 +12,71 @@ function isPrismaUniqueViolation(e: unknown): boolean {
   return typeof e === 'object' && e !== null && 'code' in e && (e as { code?: string }).code === 'P2002';
 }
 
+function enforceDeviceIdentity(
+  ev: LocalAiEventPayload,
+  verified: {
+    internalUser: { userKey: string; name: string; computerId: string };
+    computerId: string;
+    owningUser: string;
+  },
+): LocalAiEventPayload | null {
+  if (ev.computerId !== verified.computerId || ev.owningUser !== verified.owningUser) {
+    return null;
+  }
+  return {
+    ...ev,
+    userKey: verified.internalUser.userKey,
+    userName: verified.internalUser.name,
+    computerId: verified.computerId,
+    owningUser: verified.owningUser,
+  };
+}
+
 export async function POST(req: Request): Promise<Response> {
-  const key = req.headers.get('x-tracker-api-key');
-  if (!verifyTrackerApiKey(key)) {
+  const prisma = getPrisma();
+  const auth = await resolveTrackerAuth(req, prisma);
+  if (!auth) {
     return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const prisma = getPrisma();
   const body: unknown = await req.json();
   const parsed = trackerEventsRequestSchema.safeParse(body);
   if (!parsed.success) {
     return jsonResponse({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  for (const ev of parsed.data.events) {
+  const dedupeMs = readLocalMarkerDedupeMs();
+  let inserted = 0;
+  let skipped = 0;
+
+  for (let ev of parsed.data.events) {
+    if (auth.kind === 'device') {
+      const enforced = enforceDeviceIdentity(ev, auth.verified);
+      if (!enforced) {
+        return jsonResponse({ error: 'Device token identity mismatch' }, { status: 403 });
+      }
+      ev = enforced;
+    }
+
+    if (ev.marker === 'wakelock_acquired') {
+      skipped += 1;
+      continue;
+    }
+
+    const skipDedupe = await shouldSkipLocalMarkerInsert({
+      prisma,
+      marker: ev.marker,
+      userKey: ev.userKey,
+      computerId: ev.computerId,
+      owningUser: ev.owningUser,
+      timestampMs: ev.timestampMs,
+      dedupeMs,
+    });
+    if (skipDedupe) {
+      skipped += 1;
+      continue;
+    }
+
     const internal = await prisma.internalUser.findUnique({
       where: { userKey: ev.userKey },
       include: { cursorAccount: true },
@@ -47,8 +100,10 @@ export async function POST(req: Request): Promise<Response> {
           syncedAt: new Date(),
         },
       });
+      inserted += 1;
     } catch (e: unknown) {
       if (isPrismaUniqueViolation(e)) {
+        skipped += 1;
         continue;
       }
       throw e;
@@ -57,5 +112,5 @@ export async function POST(req: Request): Promise<Response> {
 
   await runMatchingPass(prisma);
 
-  return jsonResponse({ ok: true });
+  return jsonResponse({ ok: true, inserted, skipped });
 }

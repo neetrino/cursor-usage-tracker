@@ -3,16 +3,15 @@ import { userInfo } from 'node:os';
 import { existsSync, statSync } from 'node:fs';
 import * as vscode from 'vscode';
 import {
-  clearAdminApiKey,
+  clearDeviceToken,
   clearPublicSettings,
   clearStatusSnapshots,
   clearTrackerApiKey,
-  getTrackerApiKey,
-  hasTrackerApiKey,
+  getTrackerAuthCredential,
+  hasDeviceToken,
   savePublicSettings,
   setLastBackendCheck,
-  storeAdminApiKey,
-  storeTrackerApiKey,
+  storeDeviceToken,
   type ExtensionPublicSettings,
 } from './config';
 import { testBackendConnection } from './backendClient';
@@ -59,8 +58,7 @@ function mergeCursorAccountGroup(cursorAccountGroupSel: string, customCursorAcco
 function normalizedSavePayload(p: Record<string, unknown>): NormalizedSaveFormInput {
   return {
     backendUrl: asString(p.backendUrl).trim(),
-    trackerApiKey: asString(p.trackerApiKey).trim(),
-    adminApiKey: asString(p.adminApiKey).trim(),
+    deviceToken: asString(p.deviceToken).trim(),
     userKey: asString(p.userKey).trim(),
     userName: asString(p.userName).trim(),
     computerId: asString(p.computerId).trim(),
@@ -168,17 +166,19 @@ async function runTestBackend(
     return;
   }
   const n = normalizedSavePayload(p);
-  const fromSecret = (await getTrackerApiKey(context)) ?? '';
-  const apiKey = isNonEmptyString(n.trackerApiKey) ? n.trackerApiKey : fromSecret;
-  if (!isNonEmptyString(apiKey)) {
+  let auth = await getTrackerAuthCredential(context);
+  if (isNonEmptyString(n.deviceToken)) {
+    auth = { kind: 'device', token: n.deviceToken };
+  }
+  if (!auth) {
     panel.webview.postMessage({
       type: 'toast',
-      message: 'Enter tracker API key in the form or save one first.',
+      message: 'Enter device token in the form or save one first.',
       isError: true,
     });
     return;
   }
-  const result = await testBackendConnection({ baseUrl: n.backendUrl, apiKey });
+  const result = await testBackendConnection({ baseUrl: n.backendUrl, auth });
   if (result.ok) {
     const serviceLabel = asUiMessage(result.body.service, 'unknown');
     await setLastBackendCheck(context, {
@@ -235,14 +235,14 @@ async function runReset(
   onSettingsChanged: () => void | Promise<void>,
 ): Promise<void> {
   const ok = await vscode.window.showWarningMessage(
-    'Reset all extension settings and the stored tracker API key? The pending queue is not cleared.',
+    'Reset all extension settings and the stored device token? The pending queue is not cleared.',
     { modal: true },
     'Reset',
   );
   if (ok !== 'Reset') return;
   await clearPublicSettings(context);
+  await clearDeviceToken(context);
   await clearTrackerApiKey(context);
-  await clearAdminApiKey(context);
   await clearStatusSnapshots(context);
   await onSettingsChanged();
   panel.webview.postMessage({ type: 'toast', message: 'Settings reset.', isError: false });
@@ -263,7 +263,7 @@ async function runSave(
     return;
   }
   const normalized = normalizedSavePayload(p);
-  const existing = await hasTrackerApiKey(context);
+  const existing = await hasDeviceToken(context);
   const errors = validateSaveForm(normalized, existing);
   if (errors.length > 0) {
     panel.webview.postMessage({ type: 'validationErrors', errors });
@@ -279,11 +279,8 @@ async function runSave(
     cursorLogPath: normalized.cursorLogPath,
   };
   await savePublicSettings(context, publicSettings);
-  if (isNonEmptyString(normalized.trackerApiKey)) {
-    await storeTrackerApiKey(context, normalized.trackerApiKey);
-  }
-  if (isNonEmptyString(normalized.adminApiKey)) {
-    await storeAdminApiKey(context, normalized.adminApiKey);
+  if (isNonEmptyString(normalized.deviceToken)) {
+    await storeDeviceToken(context, normalized.deviceToken);
   }
   await onSettingsChanged();
   panel.webview.postMessage({ type: 'toast', message: 'Settings saved.', isError: false });

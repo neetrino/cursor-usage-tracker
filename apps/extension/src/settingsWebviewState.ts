@@ -2,11 +2,12 @@ import { existsSync, statSync } from 'node:fs';
 import type { ExtensionContext } from 'vscode';
 import {
   getLastBackendCheck,
-  getLastCursorUsageSync,
+  getLastEventSent,
+  getLastLogDiscovery,
   getLastMarker,
   getLastSync,
-  hasAdminApiKey,
-  hasTrackerApiKey,
+  getLogFileLastWriteTime,
+  hasDeviceToken,
   loadPublicSettings,
   type ExtensionPublicSettings,
 } from './config';
@@ -26,8 +27,7 @@ function isValidBackendUrl(url: string): boolean {
 
 export type WebviewStatePayload = {
   settings: ExtensionPublicSettings;
-  hasApiKey: boolean;
-  hasAdminKey: boolean;
+  hasDeviceToken: boolean;
   pendingCount: number;
   extensionVersion: string;
   logPathDisplay: string;
@@ -35,7 +35,9 @@ export type WebviewStatePayload = {
   lastBackend: string;
   lastMarker: string;
   lastSync: string;
-  lastCursorUsageSync: string;
+  lastEventSent: string;
+  lastLogDiscovery: string;
+  logFileLastWriteTime: string;
 };
 
 export async function buildWebviewState(context: ExtensionContext): Promise<WebviewStatePayload> {
@@ -67,30 +69,37 @@ export async function buildWebviewState(context: ExtensionContext): Promise<Webv
     ? `sent=${ls.sent} failed=${ls.failed} remaining=${ls.remaining} @ ${asString(ls.atIso)}`
     : '';
 
-  const lcu = await getLastCursorUsageSync(context);
-  const lastCursorUsageSync = lcu
-    ? `${lcu.ok ? 'OK' : 'FAIL'} — ${asString(lcu.message)} (events=${lcu.eventCount} imported=${lcu.importedCount} skipped=${lcu.skippedDuplicateCount}) @ ${asString(lcu.atIso)}`
+  const le = await getLastEventSent(context);
+  const lastEventSent = le ? `${asString(le.marker)} @ ${asString(le.atIso)}` : '';
+
+  const ld = await getLastLogDiscovery(context);
+  const lastLogDiscovery = ld
+    ? `${asString(ld.path)} @ ${asString(ld.atIso)} (mtime=${new Date(ld.mtimeMs).toISOString()})`
     : '';
+
+  const lw = await getLogFileLastWriteTime(context);
+  const logFileLastWriteTime =
+    typeof lw === 'number' && Number.isFinite(lw) ? new Date(lw).toISOString() : '';
 
   return {
     settings,
-    hasApiKey: await hasTrackerApiKey(context),
-    hasAdminKey: await hasAdminApiKey(context),
+    hasDeviceToken: await hasDeviceToken(context),
     pendingCount,
     extensionVersion: version,
-    logPathDisplay: logPath || '(not set)',
+    logPathDisplay: logPath || '(auto-discover)',
     logFileExists,
     lastBackend,
     lastMarker,
     lastSync,
-    lastCursorUsageSync,
+    lastEventSent,
+    lastLogDiscovery,
+    logFileLastWriteTime,
   };
 }
 
 export type NormalizedSaveFormInput = {
   backendUrl: string;
-  trackerApiKey: string;
-  adminApiKey: string;
+  deviceToken: string;
   userKey: string;
   userName: string;
   computerId: string;
@@ -101,14 +110,17 @@ export type NormalizedSaveFormInput = {
 
 type FieldErr = { field: string; message: string };
 
-export function validateSaveForm(form: NormalizedSaveFormInput, hasExistingKey: boolean): FieldErr[] {
+export function validateSaveForm(form: NormalizedSaveFormInput, hasExistingToken: boolean): FieldErr[] {
   const errors: FieldErr[] = [];
   if (!isNonEmptyString(form.backendUrl) || !isValidBackendUrl(form.backendUrl)) {
     errors.push({ field: 'backendUrl', message: 'Enter a valid http(s) URL.' });
   }
-  const keyTrim = asString(form.trackerApiKey).trim();
-  if (!hasExistingKey && !isNonEmptyString(keyTrim)) {
-    errors.push({ field: 'trackerApiKey', message: 'Tracker API key is required.' });
+  const tokenTrim = asString(form.deviceToken).trim();
+  if (!hasExistingToken && !isNonEmptyString(tokenTrim)) {
+    errors.push({
+      field: 'deviceToken',
+      message: 'Device token is required (generate in dashboard Settings).',
+    });
   }
   if (!isNonEmptyString(form.userKey)) errors.push({ field: 'userKey', message: 'Required.' });
   if (!isNonEmptyString(form.userName)) errors.push({ field: 'userName', message: 'Required.' });

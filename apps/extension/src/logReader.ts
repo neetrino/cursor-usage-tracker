@@ -2,34 +2,71 @@ import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 
+export type ReadNewLinesResult = {
+  nextOffset: number;
+  lines: string[];
+  truncated: boolean;
+};
+
 export async function readNewLinesSinceByteOffset(
   filePath: string,
   startByteOffset: number,
-): Promise<{ nextOffset: number; lines: string[] }> {
-  const s = await stat(filePath);
-  const size = s.size;
+): Promise<ReadNewLinesResult> {
+  let s;
+  try {
+    s = await stat(filePath);
+  } catch {
+    return { nextOffset: Math.max(0, startByteOffset), lines: [], truncated: false };
+  }
 
+  const fileSize = s.size;
   let byteOffset = startByteOffset;
-  if (byteOffset < 0 || byteOffset > size) {
+  let truncated = false;
+
+  if (byteOffset < 0) {
     byteOffset = 0;
   }
-  if (byteOffset >= size) {
-    return { nextOffset: size, lines: [] };
+  if (byteOffset > fileSize) {
+    byteOffset = 0;
+    truncated = true;
+  }
+  if (byteOffset >= fileSize) {
+    return { nextOffset: fileSize, lines: [], truncated };
   }
 
-  const stream = createReadStream(filePath, {
-    start: byteOffset,
-    end: size - 1,
-    encoding: 'utf8',
-  });
+  let sizeNow = fileSize;
+  try {
+    const s2 = await stat(filePath);
+    sizeNow = s2.size;
+  } catch {
+    return { nextOffset: byteOffset, lines: [], truncated };
+  }
+
+  if (byteOffset >= sizeNow) {
+    return { nextOffset: sizeNow, lines: [], truncated };
+  }
+
+  const end = sizeNow - 1;
+  if (byteOffset > end) {
+    return { nextOffset: sizeNow, lines: [], truncated: true };
+  }
 
   const lines: string[] = [];
-  const rl = createInterface({ input: stream, crlfDelay: Infinity });
-  for await (const line of rl) {
-    lines.push(line);
+  try {
+    const stream = createReadStream(filePath, {
+      start: byteOffset,
+      end,
+      encoding: 'utf8',
+    });
+    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+    for await (const line of rl) {
+      lines.push(line);
+    }
+  } catch {
+    return { nextOffset: byteOffset, lines: [], truncated };
   }
 
-  return { nextOffset: size, lines };
+  return { nextOffset: sizeNow, lines, truncated };
 }
 
 export async function readLastTextChunk(filePath: string, maxBytes: number): Promise<string> {

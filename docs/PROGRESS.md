@@ -57,6 +57,15 @@
 - [x] Vitest coverage (shared + matcher)
 - [x] README operational guide
 
+## Stability & security (2026-05-18)
+
+- [x] Canonical marker `buildRequestedModel` only (wakelock diagnostic-only)
+- [x] Device token auth (`DeviceToken` model + dashboard generate/revoke)
+- [x] Removed admin API key and CSV sync from extension
+- [x] Auto log discovery (`window*\renderer.log`) + hardened tail reader + tail mutex
+- [x] Backend `LOCAL_MARKER_DEDUPE_MS` + zero-token `ignored_zero_tokens`
+- [x] `MATCH_AUTO_CONFIDENT_MS` default 500; timing diagnostics API + settings UI
+
 ## Post-MVP fixes (extension webview)
 
 - [x] **Save / webview payloads**: Central `asString` / `isNonEmptyString` helpers; normalize all form fields before validation or storage; `cursorLogPath` optional on Save; split `cursorAccountGroup` + `customCursorAccountGroup`; hardened backend URL and path handling so webview Save never throws on undefined fields.

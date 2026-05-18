@@ -8,14 +8,14 @@ export type MatchingEnv = {
 
 export function readMatchingEnv(): MatchingEnv {
   const maxDiffMs = Number(process.env.MATCH_MAX_DIFF_MS ?? '3000');
-  const autoConfidentMs = Number(process.env.MATCH_AUTO_CONFIDENT_MS ?? '1000');
+  const autoConfidentMs = Number(process.env.MATCH_AUTO_CONFIDENT_MS ?? '500');
   return {
     maxDiffMs: Number.isFinite(maxDiffMs) ? maxDiffMs : 3000,
-    autoConfidentMs: Number.isFinite(autoConfidentMs) ? autoConfidentMs : 1000,
+    autoConfidentMs: Number.isFinite(autoConfidentMs) ? autoConfidentMs : 500,
   };
 }
 
-type LocalRow = Pick<LocalAiEvent, 'id' | 'owningUser' | 'timestampMs' | 'userId'>;
+type LocalRow = Pick<LocalAiEvent, 'id' | 'owningUser' | 'timestampMs' | 'userId' | 'marker'>;
 
 export type MatchDecision =
   | {
@@ -32,14 +32,19 @@ export type MatchDecision =
       matchDiffMs: number;
       matchConfidence: number;
     }
-  | { status: 'unknown' };
+  | { status: 'unknown' }
+  | { status: 'ignored_zero_tokens' };
 
 export function decideMatchForUsage(params: {
-  usage: Pick<CursorUsageEvent, 'timestampMs' | 'owningUser'>;
+  usage: Pick<CursorUsageEvent, 'timestampMs' | 'owningUser' | 'totalTokens'>;
   locals: LocalRow[];
   env: MatchingEnv;
 }): MatchDecision {
   const { usage, locals, env } = params;
+  if (usage.totalTokens <= 0) {
+    return { status: 'ignored_zero_tokens' };
+  }
+
   const cursorMs = usage.timestampMs;
   const sameOwner = locals.filter((l) => l.owningUser === usage.owningUser);
   const candidates = sameOwner
@@ -83,12 +88,14 @@ export async function runMatchingPass(prisma: PrismaClient): Promise<{ updated: 
       id: true,
       owningUser: true,
       timestampMs: true,
+      totalTokens: true,
       matchStatus: true,
     },
   });
 
   const locals = await prisma.localAiEvent.findMany({
-    select: { id: true, owningUser: true, timestampMs: true, userId: true },
+    where: { marker: 'buildRequestedModel' },
+    select: { id: true, owningUser: true, timestampMs: true, userId: true, marker: true },
   });
 
   const consumedLocals = new Set<string>();
@@ -98,6 +105,21 @@ export async function runMatchingPass(prisma: PrismaClient): Promise<{ updated: 
     for (const usage of pending) {
       const availableLocals = locals.filter((l) => !consumedLocals.has(l.id));
       const decision = decideMatchForUsage({ usage, locals: availableLocals, env });
+
+      if (decision.status === 'ignored_zero_tokens') {
+        await tx.cursorUsageEvent.update({
+          where: { id: usage.id },
+          data: {
+            matchStatus: 'ignored_zero_tokens',
+            matchedUserId: null,
+            matchedLocalEventId: null,
+            matchDiffMs: null,
+            matchConfidence: null,
+          },
+        });
+        updated += 1;
+        continue;
+      }
 
       if (decision.status === 'unknown') {
         await tx.cursorUsageEvent.update({

@@ -36,17 +36,20 @@ When a developer triggers AI, Cursor writes a log line shortly before usage is a
 
 ### Flow B — Local tracker
 
-1. Extension tails the selected Window log from the end (no historical replay on normal startup).
-2. On marker detection, it parses the **log line timestamp** (not “now”).
-3. It POSTs immediately to `POST /api/tracker/events` with `x-tracker-api-key`.
-4. On failure, it appends to a JSON queue on disk and retries every 60 seconds; “Sync Now” flushes the queue.
+1. Extension auto-discovers the active `window*\renderer.log` under `%APPDATA%\Cursor\logs` (and re-runs discovery periodically / on rotation).
+2. It tails from the end (no historical replay on first open of a path).
+3. On `[buildRequestedModel]` only, it parses the **log line timestamp** (local timezone → UTC ms, not “now”).
+4. It POSTs to `POST /api/tracker/events` with `Authorization: Bearer <deviceToken>` (per-device token from dashboard; legacy `x-tracker-api-key` optional for dev).
+5. Backend dedupes by `rawLineHash` and `LOCAL_MARKER_DEDUPE_MS`; wakelock markers are ignored.
+6. On failure, payloads queue on disk; retry every 60s; “Sync Now” flushes.
 
 ### Flow C — Matching
 
-1. For each usage row in `unmatched`, `unknown`, or `low_confidence` states, collect local candidates with same `owningUser` within `MATCH_MAX_DIFF_MS`.
-2. Pick nearest by absolute diff.
-3. If the second-best candidate is within `MATCH_AUTO_CONFIDENT_MS` of the best, mark `low_confidence`.
-4. Greedy assignment processes usage rows in ascending time and marks a local row as consumed once matched (one-to-one MVP).
+1. Skip usage rows with `totalTokens <= 0` → `ignored_zero_tokens` (no local consumption).
+2. For remaining rows in `unmatched`, `unknown`, or `low_confidence`, use only `LocalAiEvent` rows with `marker = buildRequestedModel`.
+3. Collect candidates with same `owningUser` within `MATCH_MAX_DIFF_MS` (default 3000ms).
+4. Pick nearest by absolute diff; if second-best is within `MATCH_AUTO_CONFIDENT_MS` (default 500ms) of the best, mark `low_confidence`.
+5. Greedy one-to-one assignment in ascending usage time.
 
 ## Privacy and forbidden data
 
@@ -59,14 +62,14 @@ The system must never store or transmit:
 The extension stores only:
 
 - Configuration (non-secret)
-- `TRACKER_API_KEY` in VS Code Secret Storage
+- Per-device token in VS Code Secret Storage (hashed on server; raw token shown once at generation)
 - A bounded pending queue of already-built JSON payloads (metadata + hashes)
 
 ## Security boundaries
 
-- **Extension**: only `TRACKER_API_KEY`. Never Cursor dashboard credentials.
-- **Server**: `CURSOR_USAGE_*` and `ADMIN_API_KEY` are process env only. Never `NEXT_PUBLIC_*` for secrets.
-- **Dashboard auth (MVP)**: httpOnly cookie derived from `ADMIN_API_KEY` via server action login. Admin API routes remain for curl/testing with `x-admin-api-key`.
+- **Extension**: device token only (scoped to one `InternalUser`). No admin API key, no global tracker key in UI, no Cursor dashboard credentials.
+- **Server**: `ADMIN_API_KEY` and optional `TRACKER_API_KEY` are process env only. Device tokens stored as SHA-256 hash in `DeviceToken` table.
+- **Dashboard auth (MVP)**: httpOnly cookie derived from `ADMIN_API_KEY`. Admin routes also accept `x-admin-api-key` for curl.
 
 ## Why SQLite for MVP
 

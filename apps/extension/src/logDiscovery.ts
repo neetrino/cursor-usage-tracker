@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { readdir, stat, readFile } from 'node:fs/promises';
-import { detectMarker } from './markers';
+import { detectCanonicalMarker, detectDiagnosticMarker } from './markers';
 import { readLastTextChunk } from './logReader';
 import {
   parseCursorLocalLogTimestampToMs,
@@ -16,6 +16,11 @@ export type DiscoveredLogFile = {
   mtimeMs: number;
   markerCountApprox: number;
 };
+
+function isPreferredRendererLog(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower.includes('window') && lower.endsWith('renderer.log');
+}
 
 async function walkLogFiles(root: string): Promise<string[]> {
   const out: string[] = [];
@@ -32,6 +37,7 @@ async function walkLogFiles(root: string): Promise<string[]> {
       }
       if (!e.isFile()) continue;
       if (!entryName.toLowerCase().endsWith('.log')) continue;
+      if (!isPreferredRendererLog(p)) continue;
       out.push(p);
     }
   }
@@ -44,10 +50,10 @@ async function walkLogFiles(root: string): Promise<string[]> {
   return out;
 }
 
-function countMarkersInText(text: string): number {
+function countCanonicalMarkersInText(text: string): number {
   let n = 0;
   for (const line of text.split(/\r?\n/)) {
-    if (detectMarker(line)) n += 1;
+    if (detectCanonicalMarker(line)) n += 1;
   }
   return n;
 }
@@ -82,7 +88,7 @@ export async function discoverCursorLogFiles(options?: {
     try {
       const buf = await readFile(f.path);
       const slice = buf.subarray(Math.max(0, buf.length - tailBytes));
-      markerCountApprox = countMarkersInText(slice.toString('utf8'));
+      markerCountApprox = countCanonicalMarkersInText(slice.toString('utf8'));
     } catch {
       markerCountApprox = 0;
     }
@@ -97,9 +103,6 @@ export async function discoverCursorLogFiles(options?: {
     if (b.markerCountApprox !== a.markerCountApprox) {
       return b.markerCountApprox - a.markerCountApprox;
     }
-    const ar = asString(a.path).toLowerCase().includes('renderer.log') ? 1 : 0;
-    const br = asString(b.path).toLowerCase().includes('renderer.log') ? 1 : 0;
-    if (br !== ar) return br - ar;
     return b.mtimeMs - a.mtimeMs;
   });
   return scored;
@@ -127,15 +130,32 @@ export async function testLogDetection(logPath: string, tailBytes = 96 * 1024): 
     const lines = chunk.split(/\r?\n/);
     for (let i = lines.length - 1; i >= 0; i -= 1) {
       const lineStr = asString(lines[i]);
-      const markerType = detectMarker(lineStr);
-      if (!markerType) continue;
-      const timestampMs = parseCursorLocalLogTimestampToMs(lineStr);
-      const timestampUtc = toUtcIso(timestampMs);
-      const marker =
-        markerType === 'buildRequestedModel'
-          ? '[buildRequestedModel]'
-          : '[ComposerWakelockManager] Acquired wakelock reason="agent-loop"';
-      return { ok: true, marker, markerType, timestampMs, timestampUtc };
+      if (detectCanonicalMarker(lineStr)) {
+        const timestampMs = parseCursorLocalLogTimestampToMs(lineStr);
+        const timestampUtc = toUtcIso(timestampMs);
+        return {
+          ok: true,
+          marker: '[buildRequestedModel]',
+          markerType: 'buildRequestedModel',
+          timestampMs,
+          timestampUtc,
+        };
+      }
+    }
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const lineStr = asString(lines[i]);
+      const diagnostic = detectDiagnosticMarker(lineStr);
+      if (diagnostic === 'wakelock_acquired') {
+        const timestampMs = parseCursorLocalLogTimestampToMs(lineStr);
+        const timestampUtc = toUtcIso(timestampMs);
+        return {
+          ok: true,
+          marker: '[ComposerWakelockManager] Acquired wakelock reason="agent-loop"',
+          markerType: 'wakelock_acquired',
+          timestampMs,
+          timestampUtc,
+        };
+      }
     }
     return {
       ok: false,

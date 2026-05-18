@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 import { readQueue, writeQueue } from './storage';
 import { postTrackerEvents } from './backendClient';
-import { getTrackerApiKey, loadPublicSettings, setLastSync } from './config';
+import { getTrackerAuthCredential, loadPublicSettings, setLastSync } from './config';
 import { asString, isNonEmptyString } from './stringUtil';
 
 export type FlushQueueResult = {
@@ -18,10 +18,10 @@ export async function getPendingCount(context: vscode.ExtensionContext): Promise
 export async function flushPendingQueue(context: vscode.ExtensionContext): Promise<FlushQueueResult> {
   const settings = loadPublicSettings(context);
   const baseUrl = asString(settings.backendUrl).trim().replace(/\/+$/, '');
-  const apiKey = await getTrackerApiKey(context);
+  const auth = await getTrackerAuthCredential(context);
   const result: FlushQueueResult = { sent: 0, failed: 0, remaining: 0 };
 
-  if (!isNonEmptyString(baseUrl) || !apiKey) {
+  if (!isNonEmptyString(baseUrl) || !auth) {
     const pending = await readQueue(context);
     result.remaining = pending.length;
     await setLastSync(context, {
@@ -47,7 +47,7 @@ export async function flushPendingQueue(context: vscode.ExtensionContext): Promi
   const remaining: typeof pending = [];
   for (const item of pending) {
     try {
-      await postTrackerEvents({ baseUrl, apiKey, events: [item.payload] });
+      await postTrackerEvents({ baseUrl, auth, events: [item.payload] });
       result.sent += 1;
     } catch {
       result.failed += 1;

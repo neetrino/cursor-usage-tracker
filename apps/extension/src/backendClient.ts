@@ -1,11 +1,4 @@
-import type { CursorUsageImportPayload } from '@cursor-usage-tracker/shared/schemas';
 import { asString } from './stringUtil';
-
-export type CursorUsageImportResponse = {
-  importedCount: number;
-  skippedDuplicateCount: number;
-  syncRunId: string;
-};
 
 export type TrackerHealthOk = {
   ok: true;
@@ -13,9 +6,20 @@ export type TrackerHealthOk = {
   time: string;
 };
 
+export type TrackerAuth =
+  | { kind: 'device'; token: string }
+  | { kind: 'legacy'; apiKey: string };
+
+function trackerAuthHeaders(auth: TrackerAuth): Record<string, string> {
+  if (auth.kind === 'device') {
+    return { authorization: `Bearer ${asString(auth.token).trim()}` };
+  }
+  return { 'x-tracker-api-key': asString(auth.apiKey).trim() };
+}
+
 export async function postTrackerEvents(params: {
   baseUrl: string;
-  apiKey: string;
+  auth: TrackerAuth;
   events: unknown[];
 }): Promise<void> {
   const url = new URL('/api/tracker/events', asString(params.baseUrl).trim());
@@ -23,7 +27,7 @@ export async function postTrackerEvents(params: {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-tracker-api-key': asString(params.apiKey).trim(),
+      ...trackerAuthHeaders(params.auth),
     },
     body: JSON.stringify({ events: params.events }),
   });
@@ -35,7 +39,7 @@ export async function postTrackerEvents(params: {
 
 export async function testBackendConnection(params: {
   baseUrl: string;
-  apiKey: string;
+  auth: TrackerAuth;
 }): Promise<{ ok: true; body: TrackerHealthOk } | { ok: false; message: string }> {
   const base = asString(params.baseUrl).trim().replace(/\/+$/, '');
   let url: URL;
@@ -47,10 +51,10 @@ export async function testBackendConnection(params: {
   try {
     const res = await fetch(url, {
       method: 'GET',
-      headers: { 'x-tracker-api-key': asString(params.apiKey).trim() },
+      headers: trackerAuthHeaders(params.auth),
     });
     if (res.status === 401) {
-      return { ok: false, message: 'Unauthorized (check tracker API key)' };
+      return { ok: false, message: 'Unauthorized (check device token)' };
     }
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -70,43 +74,4 @@ export async function testBackendConnection(params: {
     const message = e instanceof Error ? e.message : String(e);
     return { ok: false, message };
   }
-}
-
-export async function postCursorUsageImport(params: {
-  baseUrl: string;
-  adminApiKey: string;
-  payload: CursorUsageImportPayload;
-}): Promise<CursorUsageImportResponse> {
-  const base = asString(params.baseUrl).trim().replace(/\/+$/, '');
-  const url = new URL('/api/cursor-usage/import', base);
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-admin-api-key': asString(params.adminApiKey).trim(),
-    },
-    body: JSON.stringify(params.payload),
-  });
-  if (res.status === 401) {
-    throw new Error('Unauthorized (check admin API key)');
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Usage import failed: HTTP ${res.status} ${text}`.trim());
-  }
-  const body: unknown = await res.json().catch(() => null);
-  if (
-    typeof body === 'object' &&
-    body !== null &&
-    'importedCount' in body &&
-    typeof (body as { importedCount?: unknown }).importedCount === 'number'
-  ) {
-    const b = body as CursorUsageImportResponse;
-    return {
-      importedCount: b.importedCount,
-      skippedDuplicateCount: b.skippedDuplicateCount ?? 0,
-      syncRunId: asString(b.syncRunId),
-    };
-  }
-  throw new Error('Unexpected import response');
 }

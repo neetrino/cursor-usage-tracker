@@ -76,18 +76,10 @@ export function renderSettingsWebviewHtml(params: {
     <div class="err" id="err-backendUrl"></div>
   </div>
   <div class="row">
-    <label for="trackerApiKey">Tracker API Key (required, stored securely)</label>
-    <input id="trackerApiKey" type="password" autocomplete="off" />
-    <div class="hint" id="apiKeyHint"></div>
-    <div class="err" id="err-trackerApiKey"></div>
-  </div>
-
-  <h2>Cursor usage sync</h2>
-  <div class="row">
-    <label for="adminApiKey">Admin API Key (required for usage CSV import, stored securely)</label>
-    <input id="adminApiKey" type="password" autocomplete="off" />
-    <div class="hint" id="adminKeyHint">Matches server ADMIN_API_KEY. Extension fetches Cursor usage CSV every 10 minutes when saved.</div>
-    <div class="err" id="err-adminApiKey"></div>
+    <label for="deviceToken">Device Token (required, stored securely)</label>
+    <input id="deviceToken" type="password" autocomplete="off" />
+    <div class="hint" id="deviceTokenHint">Paste the device token from the admin dashboard. This is not the admin API key.</div>
+    <div class="err" id="err-deviceToken"></div>
   </div>
 
   <h2>User identity</h2>
@@ -165,7 +157,7 @@ export function renderSettingsWebviewHtml(params: {
     }
     function setErr(id, msg) { const el = $(id); if (el) el.textContent = msg || ''; }
     function clearErrors() {
-      ['backendUrl','trackerApiKey','adminApiKey','userKey','userName','computerId','owningUser','cursorLogPath'].forEach(function (k) {
+      ['backendUrl','deviceToken','userKey','userName','computerId','owningUser','cursorLogPath'].forEach(function (k) {
         setErr('err-' + k, '');
       });
     }
@@ -203,8 +195,7 @@ export function renderSettingsWebviewHtml(params: {
       var customVal = inputVal('accountGroupCustom').trim();
       return {
         backendUrl: inputVal('backendUrl').trim(),
-        trackerApiKey: inputVal('trackerApiKey'),
-        adminApiKey: inputVal('adminApiKey'),
+        deviceToken: inputVal('deviceToken'),
         userKey: inputVal('userKey').trim(),
         userName: inputVal('userName').trim(),
         computerId: inputVal('computerId').trim(),
@@ -226,7 +217,9 @@ export function renderSettingsWebviewHtml(params: {
         'Last backend check: ' + (s.lastBackend || 'Not tested yet'),
         'Last marker: ' + (s.lastMarker || '—'),
         'Last sync: ' + (s.lastSync || '—'),
-        'Last Cursor usage sync: ' + (s.lastCursorUsageSync || '—'),
+        'Last event sent: ' + (s.lastEventSent || '—'),
+        'Last log discovery: ' + (s.lastLogDiscovery || '—'),
+        'Log file last write: ' + (s.logFileLastWriteTime || '—'),
       ];
       el.textContent = lines.join('\\n');
     }
@@ -239,19 +232,12 @@ export function renderSettingsWebviewHtml(params: {
       setInput('computerId', s.settings.computerId);
       setInput('owningUser', s.settings.owningUser);
       setInput('cursorLogPath', s.settings.cursorLogPath);
-      setInput('trackerApiKey', '');
-      setInput('adminApiKey', '');
-      var hint = $('apiKeyHint');
+      setInput('deviceToken', '');
+      var hint = $('deviceTokenHint');
       if (hint) {
-        hint.textContent = s.hasApiKey
-          ? 'A key is already saved. Leave blank to keep it; enter a new value to replace.'
-          : 'Enter your tracker API key (matches server TRACKER_API_KEY).';
-      }
-      var adminHint = $('adminKeyHint');
-      if (adminHint) {
-        adminHint.textContent = s.hasAdminKey
-          ? 'Admin key saved. Leave blank to keep it; enter a new value to replace. Fetches Cursor usage CSV every 10 minutes.'
-          : 'Enter admin API key (matches server ADMIN_API_KEY) to import usage from Cursor dashboard CSV.';
+        hint.textContent = s.hasDeviceToken
+          ? 'A device token is already saved. Leave blank to keep it; enter a new value to replace.'
+          : 'Paste the device token from the admin dashboard (Settings → Device tokens). This is not the admin API key.';
       }
       applyAccountGroup(s.settings.cursorAccountGroup || 'ultra_1');
       renderStatus(s);

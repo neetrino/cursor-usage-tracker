@@ -65,7 +65,11 @@ export default async function UsageEventsPage({
   const prisma = getPrisma();
   const where: Prisma.CursorUsageEventWhereInput = {};
   if (owningUser) where.owningUser = owningUser;
-  if (matchStatus) where.matchStatus = matchStatus;
+  if (matchStatus) {
+    where.matchStatus = matchStatus;
+  } else {
+    where.matchStatus = { not: 'ignored_zero_tokens' };
+  }
   if (userId) where.matchedUserId = userId;
   if (from || to) {
     where.timestampUtc = {};
@@ -111,6 +115,7 @@ export default async function UsageEventsPage({
             <option value="unmatched">unmatched</option>
             <option value="unknown">unknown</option>
             <option value="low_confidence">low_confidence</option>
+            <option value="ignored_zero_tokens">ignored_zero_tokens</option>
           </select>
         </label>
         <label className="block text-xs text-[#666]">
@@ -173,7 +178,11 @@ export default async function UsageEventsPage({
                     <td className="px-4 py-3 text-[#e5e5e5]">
                       {r.matchedUser ? `${r.matchedUser.name}` : '—'}
                     </td>
-                    <td className="px-4 py-3 text-[#666]">{r.matchStatus}</td>
+                    <td
+                      className={`px-4 py-3 ${r.matchStatus === 'ignored_zero_tokens' ? 'text-[#444]' : 'text-[#666]'}`}
+                    >
+                      {r.matchStatus}
+                    </td>
                   </tr>
                 ))}
               </tbody>

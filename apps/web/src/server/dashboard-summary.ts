@@ -44,9 +44,10 @@ export async function buildDashboardSummary(): Promise<DashboardSummary> {
 
   const chargedCents = usage.reduce((acc, r) => acc + (r.chargedCents ?? 0), 0);
 
-  const unknownCount = usage.filter((r) => r.matchStatus === 'unknown').length;
-  const lowConfidenceCount = usage.filter((r) => r.matchStatus === 'low_confidence').length;
-  const unmatchedCount = usage.filter((r) => r.matchStatus === 'unmatched').length;
+  const matchable = usage.filter((r) => r.matchStatus !== 'ignored_zero_tokens');
+  const unknownCount = matchable.filter((r) => r.matchStatus === 'unknown').length;
+  const lowConfidenceCount = matchable.filter((r) => r.matchStatus === 'low_confidence').length;
+  const unmatchedCount = matchable.filter((r) => r.matchStatus === 'unmatched').length;
 
   const matchedUserIds = [...new Set(usage.map((u) => u.matchedUserId).filter(Boolean))] as string[];
   const users = await prisma.internalUser.findMany({

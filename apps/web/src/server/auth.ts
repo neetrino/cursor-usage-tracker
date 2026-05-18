@@ -1,4 +1,11 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import type { PrismaClient } from '@prisma/client';
+import { extractDeviceTokenFromRequest } from '@/server/device-token';
+import { verifyDeviceToken, type VerifiedDeviceToken } from '@/server/verify-device-token';
+
+export type TrackerAuthResult =
+  | { kind: 'global' }
+  | { kind: 'device'; verified: VerifiedDeviceToken };
 
 export function getTrackerApiKey(): string | undefined {
   return process.env.TRACKER_API_KEY;
@@ -12,6 +19,23 @@ export function verifyTrackerApiKey(headerValue: string | null): boolean {
   const expected = getTrackerApiKey();
   if (!expected || !headerValue) return false;
   return timingSafeCompare(headerValue, expected);
+}
+
+export async function resolveTrackerAuth(
+  req: Request,
+  prisma: PrismaClient,
+): Promise<TrackerAuthResult | null> {
+  const deviceRaw = extractDeviceTokenFromRequest(req);
+  if (deviceRaw) {
+    const verified = await verifyDeviceToken(prisma, deviceRaw);
+    if (verified) return { kind: 'device', verified };
+    return null;
+  }
+  const trackerKey = req.headers.get('x-tracker-api-key');
+  if (verifyTrackerApiKey(trackerKey)) {
+    return { kind: 'global' };
+  }
+  return null;
 }
 
 export function verifyAdminApiKey(headerValue: string | null): boolean {

@@ -2,7 +2,9 @@ import { getPrisma } from '@/server/db';
 import { getHistoryCounts } from '@/server/clear-history';
 import { importCursorUsageJsonAction, runMatchingNowAction } from '@/server/dashboard-actions';
 import { ClearHistoryDangerZone } from './ClearHistoryDangerZone';
+import { DeviceTokensSection } from './DeviceTokensSection';
 import { SyncFromCursorButton } from './SyncFromCursorButton';
+import { TimingDiagnosticsSection } from './TimingDiagnosticsSection';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -114,6 +116,8 @@ export default async function SettingsPage({
         <SyncFromCursorButton />
       </section>
 
+      <TimingDiagnosticsSection />
+
       <section className="rounded-xl border border-[#1f1f1f] bg-[#111111] p-5">
         <h2 className="mb-4 text-sm font-medium text-[#e5e5e5]">Matching</h2>
         <form action={runMatchingNowAction}>
@@ -160,6 +164,16 @@ export default async function SettingsPage({
           u.cursorAccount.name,
           u.cursorAccount.owningUser,
         ])}
+      />
+
+      <DeviceTokensSection
+        users={users.map((u) => ({
+          id: u.id,
+          userKey: u.userKey,
+          name: u.name,
+          computerId: u.computerId,
+          owningUser: u.cursorAccount.owningUser,
+        }))}
       />
 
       <DataTable

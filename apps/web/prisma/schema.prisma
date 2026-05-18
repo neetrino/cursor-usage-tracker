@@ -29,6 +29,25 @@ model InternalUser {
   updatedAt       DateTime @updatedAt
   localEvents     LocalAiEvent[]
   matchedUsageEvents CursorUsageEvent[]
+  deviceTokens    DeviceToken[]
+}
+
+model DeviceToken {
+  id             String       @id @default(cuid())
+  internalUserId String
+  internalUser   InternalUser @relation(fields: [internalUserId], references: [id], onDelete: Cascade)
+  tokenHash      String       @unique
+  tokenPrefix    String
+  tokenLast4     String
+  computerId     String
+  owningUser     String
+  isActive       Boolean      @default(true)
+  lastUsedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  revokedAt      DateTime?
+
+  @@index([internalUserId])
+  @@index([owningUser, computerId])
 }
 
 model LocalAiEvent {
